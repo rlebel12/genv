@@ -13,7 +13,7 @@ type eVar string
 func Required(key string, fallback string) eVar {
 	if value, ok := os.LookupEnv(key); ok {
 		return eVar(value)
-	} else if AllowFallbacks() {
+	} else if allowFallbacks() {
 		return eVar(fallback)
 	} else {
 		panic("Missing required environment variable: " + key)
@@ -57,6 +57,6 @@ func (e eVar) Float64() float64 {
 	return ret
 }
 
-func AllowFallbacks() bool {
+func allowFallbacks() bool {
 	return IsDev() || IsTest()
 }
