@@ -1,4 +1,5 @@
 # goevars
+[![Test](https://github.com/rlebel12/goevars/actions/workflows/test.yml/badge.svg)](https://github.com/rlebel12/goevars/actions/workflows/test.yml)
 
 A small package to help work with environment variables in Go. Variables are to be initialized like so:
     
