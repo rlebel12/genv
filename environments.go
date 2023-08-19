@@ -35,6 +35,10 @@ var environments = map[string]environment{
 var currentEnv = Dev
 
 func init() {
+	updateCurrentEnv()
+}
+
+func updateCurrentEnv() {
 	envStr := Optional("ENV", "DEVELOPMENT").String()
 	env, ok := environments[envStr]
 	if !ok {
