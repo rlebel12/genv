@@ -31,7 +31,7 @@ func TestOptionalAllowFallback(t *testing.T) {
 }
 
 func TestEVarString(t *testing.T) {
-	assert.Equal(t, "val", string(eVar("val")))
+	assert.Equal(t, "val", eVar("val").String())
 }
 
 func TestEvarBoolValid(t *testing.T) {
