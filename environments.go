@@ -35,10 +35,10 @@ var environments = map[string]environment{
 var currentEnv = Dev
 
 func init() {
-	var ok bool
 	envStr := Optional("ENV", "DEVELOPMENT").String()
-	currentEnv, ok = environments[envStr]
+	env, ok := environments[envStr]
 	if !ok {
 		panic("Invalid environment: " + envStr)
 	}
+	currentEnv = env
 }
