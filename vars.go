@@ -29,6 +29,12 @@ func Optional(key string, fallback string) eVar {
 	}
 }
 
+// Returns true if the environment variable with the given key is set and non-empty
+func Presence(key string) bool {
+	val, ok := os.LookupEnv(key)
+	return ok && val != ""
+}
+
 func (e eVar) String() string {
 	return string(e)
 }

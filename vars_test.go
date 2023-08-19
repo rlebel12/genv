@@ -30,6 +30,20 @@ func TestOptionalAllowFallback(t *testing.T) {
 	assert.Equal(t, "fallback", string(Optional("TEST_VAR", "fallback")))
 }
 
+func TestPresencePresent(t *testing.T) {
+	t.Setenv("TEST_VAR", "val")
+	assert.True(t, Presence("TEST_VAR"))
+}
+
+func TestPresenceAbsent(t *testing.T) {
+	assert.False(t, Presence("TEST_VAR"))
+}
+
+func TestPresenceEmpty(t *testing.T) {
+	t.Setenv("TEST_VAR", "")
+	assert.False(t, Presence("TEST_VAR"))
+}
+
 func TestEVarString(t *testing.T) {
 	assert.Equal(t, "val", eVar("val").String())
 }
