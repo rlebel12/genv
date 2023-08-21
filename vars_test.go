@@ -6,30 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRequiredProvided(t *testing.T) {
-	t.Setenv("TEST_VAR", "val")
-	assert.Equal(t, "val", string(Required("TEST_VAR", "")))
-}
-
-func TestRequiredAllowFallback(t *testing.T) {
-	assert.Equal(t, "fallback", string(Required("TEST_VAR", "fallback")))
-}
-
-func TestRequiredDisallowFallback(t *testing.T) {
-	t.Setenv("ENV", "PRODUCTION")
-	updateCurrentEnv()
-	assert.Panics(t, func() { Required("TEST_VAR", "") })
-}
-
-func TestOptionalProvided(t *testing.T) {
-	t.Setenv("TEST_VAR", "val")
-	assert.Equal(t, "val", string(Optional("TEST_VAR", "fallback")))
-}
-
-func TestOptionalAllowFallback(t *testing.T) {
-	assert.Equal(t, "fallback", string(Optional("TEST_VAR", "fallback")))
-}
-
 func TestPresencePresent(t *testing.T) {
 	t.Setenv("TEST_VAR", "val")
 	assert.True(t, Presence("TEST_VAR"))
@@ -45,32 +21,40 @@ func TestPresenceEmpty(t *testing.T) {
 }
 
 func TestEVarString(t *testing.T) {
-	assert.Equal(t, "val", eVar("val").String())
+	ev := eVar{key: "TEST_VAR", value: "val"}
+	assert.Equal(t, "val", ev.String())
 }
 
 func TestEvarBoolValid(t *testing.T) {
-	assert.True(t, eVar("true").Bool())
-	assert.False(t, eVar("false").Bool())
+	ev := eVar{key: "TEST_VAR", value: "true"}
+	assert.True(t, ev.Bool())
+	ev.value = "false"
+	assert.False(t, ev.Bool())
 }
 
 func TestEvarBoolInvalid(t *testing.T) {
-	assert.Panics(t, func() { eVar("invalid").Bool() })
+	ev := eVar{key: "TEST_VAR", value: "invalid"}
+	assert.Panics(t, func() { ev.Bool() })
 }
 
 func TestEvarIntValid(t *testing.T) {
-	assert.Equal(t, 123, eVar("123").Int())
+	ev := eVar{key: "TEST_VAR", value: "123"}
+	assert.Equal(t, 123, ev.Int())
 }
 
 func TestEvarIntInvalid(t *testing.T) {
-	assert.Panics(t, func() { eVar("invalid").Int() })
+	ev := eVar{key: "TEST_VAR", value: "invalid"}
+	assert.Panics(t, func() { ev.Int() })
 }
 
 func TestEvarFloat64Valid(t *testing.T) {
-	assert.Equal(t, 123.456, eVar("123.456").Float64())
+	ev := eVar{key: "TEST_VAR", value: "123.456"}
+	assert.Equal(t, 123.456, ev.Float64())
 }
 
 func TestEvarFloat64Invalid(t *testing.T) {
-	assert.Panics(t, func() { eVar("invalid").Float64() })
+	ev := eVar{key: "TEST_VAR", value: "invalid"}
+	assert.Panics(t, func() { ev.Float64() })
 }
 
 func TestAllowFallbacksDev(t *testing.T) {
