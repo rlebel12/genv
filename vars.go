@@ -12,6 +12,46 @@ type eVar struct {
 	optional bool
 }
 
+func New(key string, opts ...eVarOpt) eVar {
+	ev := eVar{key: key}
+	ev.value, ev.found = os.LookupEnv(key)
+	for _, opt := range opts {
+		opt(&ev)
+	}
+	if !ev.optional && ev.value == "" {
+		panic("Missing required environment variable: " + ev.key)
+	}
+	return ev
+}
+
+func (e eVar) String() string {
+	return e.value
+}
+
+func (e eVar) Bool() bool {
+	ret, err := strconv.ParseBool(e.value)
+	if err != nil {
+		panic("Invalid boolean environment variable: " + e.value)
+	}
+	return ret
+}
+
+func (e eVar) Int() int {
+	ret, err := strconv.Atoi(e.value)
+	if err != nil {
+		panic("Invalid integer environment variable: " + e.value)
+	}
+	return ret
+}
+
+func (e eVar) Float64() float64 {
+	ret, err := strconv.ParseFloat(e.value, 64)
+	if err != nil {
+		panic("Invalid float environment variable: " + e.value)
+	}
+	return ret
+}
+
 type eVarOpt func(*eVar)
 
 func Fallback(value string) eVarOpt {
@@ -28,54 +68,10 @@ func Optional() eVarOpt {
 	}
 }
 
-func New(key string, opts ...eVarOpt) eVar {
-	ev := eVar{key: key}
-	ev.value, ev.found = os.LookupEnv(key)
-	for _, opt := range opts {
-		opt(&ev)
-	}
-	if !ev.optional && ev.value == "" {
-		panic("Missing required environment variable: " + ev.key)
-	}
-	return ev
-}
-
 // Returns true if the environment variable with the given key is set and non-empty
 func Presence(key string) bool {
 	val, ok := os.LookupEnv(key)
 	return ok && val != ""
-}
-
-func (e eVar) String() string {
-	return e.convert()
-}
-
-func (e eVar) Bool() bool {
-	ret, err := strconv.ParseBool(e.convert())
-	if err != nil {
-		panic("Invalid boolean environment variable: " + e.convert())
-	}
-	return ret
-}
-
-func (e eVar) Int() int {
-	ret, err := strconv.Atoi(e.convert())
-	if err != nil {
-		panic("Invalid integer environment variable: " + e.convert())
-	}
-	return ret
-}
-
-func (e eVar) Float64() float64 {
-	ret, err := strconv.ParseFloat(e.convert(), 64)
-	if err != nil {
-		panic("Invalid float environment variable: " + e.convert())
-	}
-	return ret
-}
-
-func (ev eVar) convert() string {
-	return ev.value
 }
 
 func allowFallbacks() bool {
