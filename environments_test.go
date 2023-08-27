@@ -1,4 +1,4 @@
-package goevars
+package goenvvars
 
 import (
 	"testing"

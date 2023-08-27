@@ -1,19 +1,19 @@
-package goevars
+package goenvvars
 
 import (
 	"os"
 	"strconv"
 )
 
-type eVar struct {
+type envVarData struct {
 	key      string
 	value    string
 	found    bool
 	optional bool
 }
 
-func New(key string, opts ...eVarOpt) eVar {
-	ev := eVar{key: key}
+func EnvVar(key string, opts ...envVarOpt) envVarData {
+	ev := envVarData{key: key}
 	ev.value, ev.found = os.LookupEnv(key)
 	for _, opt := range opts {
 		opt(&ev)
@@ -24,11 +24,11 @@ func New(key string, opts ...eVarOpt) eVar {
 	return ev
 }
 
-func (e eVar) String() string {
+func (e envVarData) String() string {
 	return e.value
 }
 
-func (e eVar) Bool() bool {
+func (e envVarData) Bool() bool {
 	ret, err := strconv.ParseBool(e.value)
 	if err != nil {
 		panic("Invalid boolean environment variable: " + e.value)
@@ -36,7 +36,7 @@ func (e eVar) Bool() bool {
 	return ret
 }
 
-func (e eVar) Int() int {
+func (e envVarData) Int() int {
 	ret, err := strconv.Atoi(e.value)
 	if err != nil {
 		panic("Invalid integer environment variable: " + e.value)
@@ -44,7 +44,7 @@ func (e eVar) Int() int {
 	return ret
 }
 
-func (e eVar) Float64() float64 {
+func (e envVarData) Float64() float64 {
 	ret, err := strconv.ParseFloat(e.value, 64)
 	if err != nil {
 		panic("Invalid float environment variable: " + e.value)
@@ -52,18 +52,18 @@ func (e eVar) Float64() float64 {
 	return ret
 }
 
-type eVarOpt func(*eVar)
+type envVarOpt func(*envVarData)
 
-func Fallback(value string) eVarOpt {
-	return func(e *eVar) {
+func Fallback(value string) envVarOpt {
+	return func(e *envVarData) {
 		if !e.found && allowFallbacks() {
 			e.value = value
 		}
 	}
 }
 
-func Optional() eVarOpt {
-	return func(e *eVar) {
+func Optional() envVarOpt {
+	return func(e *envVarData) {
 		e.optional = true
 	}
 }

@@ -1,4 +1,4 @@
-package goevars
+package goenvvars
 
 type environment uint8
 
@@ -39,7 +39,7 @@ func init() {
 }
 
 func updateCurrentEnv() {
-	envStr := New("ENV", Optional(), Fallback("DEVELOPMENT")).String()
+	envStr := EnvVar("ENV", Optional(), Fallback("DEVELOPMENT")).String()
 	env, ok := environments[envStr]
 	if !ok {
 		panic("Invalid environment: " + envStr)

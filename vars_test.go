@@ -1,4 +1,4 @@
-package goevars
+package goenvvars
 
 import (
 	"testing"
@@ -21,39 +21,39 @@ func TestPresenceEmpty(t *testing.T) {
 }
 
 func TestEVarString(t *testing.T) {
-	ev := eVar{key: "TEST_VAR", value: "val"}
+	ev := envVarData{key: "TEST_VAR", value: "val"}
 	assert.Equal(t, "val", ev.String())
 }
 
 func TestEvarBoolValid(t *testing.T) {
-	ev := eVar{key: "TEST_VAR", value: "true"}
+	ev := envVarData{key: "TEST_VAR", value: "true"}
 	assert.True(t, ev.Bool())
 	ev.value = "false"
 	assert.False(t, ev.Bool())
 }
 
 func TestEvarBoolInvalid(t *testing.T) {
-	ev := eVar{key: "TEST_VAR", value: "invalid"}
+	ev := envVarData{key: "TEST_VAR", value: "invalid"}
 	assert.Panics(t, func() { ev.Bool() })
 }
 
 func TestEvarIntValid(t *testing.T) {
-	ev := eVar{key: "TEST_VAR", value: "123"}
+	ev := envVarData{key: "TEST_VAR", value: "123"}
 	assert.Equal(t, 123, ev.Int())
 }
 
 func TestEvarIntInvalid(t *testing.T) {
-	ev := eVar{key: "TEST_VAR", value: "invalid"}
+	ev := envVarData{key: "TEST_VAR", value: "invalid"}
 	assert.Panics(t, func() { ev.Int() })
 }
 
 func TestEvarFloat64Valid(t *testing.T) {
-	ev := eVar{key: "TEST_VAR", value: "123.456"}
+	ev := envVarData{key: "TEST_VAR", value: "123.456"}
 	assert.Equal(t, 123.456, ev.Float64())
 }
 
 func TestEvarFloat64Invalid(t *testing.T) {
-	ev := eVar{key: "TEST_VAR", value: "invalid"}
+	ev := envVarData{key: "TEST_VAR", value: "invalid"}
 	assert.Panics(t, func() { ev.Float64() })
 }
 
