@@ -39,7 +39,7 @@ func init() {
 }
 
 func updateCurrentEnv() {
-	envStr := NewEnvVar("ENV", Optional(), Fallback(
+	envStr := New("ENV", Optional(), Fallback(
 		"DEVELOPMENT",
 		OverrideAllowFallback(func() bool {
 			return true

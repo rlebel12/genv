@@ -22,7 +22,7 @@ func TestNewEnvVar(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Run("Required", func(t *testing.T) {
 				t.Setenv("TEST_VAR", "val")
-				actual := NewEnvVar("TEST_VAR")
+				actual := New("TEST_VAR")
 				expected := &EnvVar{
 					Key:      "TEST_VAR",
 					Value:    "val",
@@ -34,7 +34,7 @@ func TestNewEnvVar(t *testing.T) {
 
 			t.Run("Optional", func(t *testing.T) {
 				t.Setenv("TEST_VAR", "val")
-				actual := NewEnvVar("TEST_VAR", Optional())
+				actual := New("TEST_VAR", Optional())
 				expected := &EnvVar{
 					Key:      "TEST_VAR",
 					Value:    "val",
@@ -48,12 +48,12 @@ func TestNewEnvVar(t *testing.T) {
 		t.Run("Empty", func(t *testing.T) {
 			t.Run("Required", func(t *testing.T) {
 				t.Setenv("TEST_VAR", "")
-				assert.Panics(t, func() { NewEnvVar("TEST_VAR") })
+				assert.Panics(t, func() { New("TEST_VAR") })
 			})
 
 			t.Run("Optional", func(t *testing.T) {
 				t.Setenv("TEST_VAR", "")
-				actual := NewEnvVar("TEST_VAR", Optional())
+				actual := New("TEST_VAR", Optional())
 				expected := &EnvVar{
 					Key:      "TEST_VAR",
 					Value:    "",
@@ -67,11 +67,11 @@ func TestNewEnvVar(t *testing.T) {
 
 	t.Run("Undefined", func(t *testing.T) {
 		t.Run("Required", func(t *testing.T) {
-			assert.Panics(t, func() { NewEnvVar("TEST_VAR") })
+			assert.Panics(t, func() { New("TEST_VAR") })
 		})
 
 		t.Run("Optional", func(t *testing.T) {
-			actual := NewEnvVar("TEST_VAR", Optional())
+			actual := New("TEST_VAR", Optional())
 			expected := &EnvVar{
 				Key:      "TEST_VAR",
 				Value:    "",
@@ -87,8 +87,8 @@ func TestOptional(t *testing.T) {
 	const key = "TEST_VAR"
 	fb := Fallback("fallback")
 	DefaultAllowFallback = func() bool { return true }
-	assert.Equal(t, false, NewEnvVar(key, fb).Optional)
-	assert.Equal(t, true, NewEnvVar(key, fb, Optional()).Optional)
+	assert.Equal(t, false, New(key, fb).Optional)
+	assert.Equal(t, true, New(key, fb, Optional()).Optional)
 }
 
 type MockFallbackOpt struct {
@@ -110,19 +110,19 @@ func TestFallback(t *testing.T) {
 	t.Run("Options", func(t *testing.T) {
 		opt := new(MockFallbackOpt)
 		opt.On("optFunc")
-		NewEnvVar("TEST_VAR", Fallback("fallback", fallbackOptForTest(opt)))
+		New("TEST_VAR", Fallback("fallback", fallbackOptForTest(opt)))
 		opt.AssertExpectations(t)
 	})
 
 	t.Run("Found", func(t *testing.T) {
 		t.Setenv("TEST_VAR", "val")
-		ev := NewEnvVar("TEST_VAR", Fallback("fallback"))
+		ev := New("TEST_VAR", Fallback("fallback"))
 		assert.Equal(t, "val", ev.Value)
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
 		t.Run("AllowFallback", func(t *testing.T) {
-			ev := NewEnvVar("TEST_VAR", Fallback(
+			ev := New("TEST_VAR", Fallback(
 				"fallback",
 				OverrideAllowFallback(func() bool { return true }),
 			))
@@ -131,7 +131,7 @@ func TestFallback(t *testing.T) {
 
 		t.Run("DisallowFallback", func(t *testing.T) {
 			assert.Panics(t, func() {
-				NewEnvVar("TEST_VAR", Fallback(
+				New("TEST_VAR", Fallback(
 					"fallback",
 					OverrideAllowFallback(func() bool { return false }),
 				))

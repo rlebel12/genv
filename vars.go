@@ -19,7 +19,7 @@ type fallbackOpt func(*EnvVar)
 
 var DefaultAllowFallback = defaultAllowFallback
 
-func NewEnvVar(key string, opts ...envVarOpt) *EnvVar {
+func New(key string, opts ...envVarOpt) *EnvVar {
 	ev := new(EnvVar)
 	ev.Key = key
 	ev.allowFallback = DefaultAllowFallback
