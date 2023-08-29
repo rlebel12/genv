@@ -1,4 +1,5 @@
 # goenvvars
+[![Go Reference](https://pkg.go.dev/badge/github.com/rlebel12/goenvvars/v2.svg)](https://pkg.go.dev/github.com/rlebel12/goenvvars/v2)
 [![Test](https://github.com/rlebel12/goenvvars/actions/workflows/test.yml/badge.svg)](https://github.com/rlebel12/goenvvars/actions/workflows/test.yml)
 
 A small package to help work with environment variables in Go.
