@@ -6,19 +6,19 @@ A small package to help work with environment variables in Go.
 
 ## Installation
 ```console
-go get github.com/rlebel12/goenvvars
+go get github.com/rlebel12/goenvvars/v2
 ```
 
 ## Usage
 
 First, ensure that the package is imported:
 ```go
-import "github.com/rlebel12/goenvvars"
+import "github.com/rlebel12/goenvvars/v2"
 ```
 
 Optionally, use an alias for brevity (used in the examples below):
 ```go
-import ev "github.com/rlebel12/goenvvars"
+import ev "github.com/rlebel12/goenvvars/v2"
 ```
 
 
@@ -71,7 +71,7 @@ var FallbackVar = ev.New("FALLBACK_VAR").
 
 This approach takes priority over the global override.
 
-### Comining Options
+### Combining Options
 Options can be chained together and combined. For example, it is possibly to declare than an environment variable is both
 optional and has a fallback value. This means that the fallback value will be used if allowed and necessary, and the program
 will not panic if the final value is still absent.
