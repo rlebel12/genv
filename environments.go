@@ -39,7 +39,12 @@ func init() {
 }
 
 func updateCurrentEnv() {
-	envStr := NewEnvVar("ENV", Optional(), Fallback("DEVELOPMENT")).String()
+	envStr := NewEnvVar("ENV", Optional(), Fallback(
+		"DEVELOPMENT",
+		OverrideAllowFallback(func() bool {
+			return true
+		}),
+	)).String()
 	env, ok := environments[envStr]
 	if !ok {
 		panic("Invalid environment: " + envStr)

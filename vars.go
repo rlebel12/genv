@@ -6,66 +6,86 @@ import (
 )
 
 type EnvVar struct {
-	key      string
-	value    string
-	found    bool
-	optional bool
+	Key           string
+	Value         string
+	Found         bool
+	Optional      bool
+	allowFallback func() bool
 }
 
-func NewEnvVar(key string, opts ...envVarOpt) EnvVar {
-	ev := EnvVar{key: key}
-	ev.value, ev.found = os.LookupEnv(key)
+type envVarOpt func(*EnvVar)
+
+type fallbackOpt func(*EnvVar)
+
+var DefaultAllowFallback = defaultAllowFallback
+
+func NewEnvVar(key string, opts ...envVarOpt) *EnvVar {
+	ev := new(EnvVar)
+	ev.Key = key
+	ev.allowFallback = DefaultAllowFallback
+	ev.Value, ev.Found = os.LookupEnv(key)
+
 	for _, opt := range opts {
-		opt(&ev)
+		opt(ev)
 	}
-	if !ev.optional && ev.value == "" {
-		panic("Missing required environment variable: " + ev.key)
+
+	if !ev.Optional && ev.Value == "" {
+		panic("Missing required environment variable: " + ev.Key)
 	}
+
 	return ev
 }
 
+func Optional() envVarOpt {
+	return func(e *EnvVar) {
+		e.Optional = true
+	}
+}
+
+func Fallback(value string, opts ...fallbackOpt) envVarOpt {
+	return func(e *EnvVar) {
+		for _, opt := range opts {
+			opt(e)
+		}
+
+		if !e.Found && e.allowFallback() {
+			e.Value = value
+		}
+	}
+}
+
+func OverrideAllowFallback(af func() bool) fallbackOpt {
+	return func(e *EnvVar) {
+		e.allowFallback = af
+	}
+}
+
 func (e EnvVar) String() string {
-	return e.value
+	return e.Value
 }
 
 func (e EnvVar) Bool() bool {
-	ret, err := strconv.ParseBool(e.value)
+	ret, err := strconv.ParseBool(e.Value)
 	if err != nil {
-		panic("Invalid boolean environment variable: " + e.value)
+		panic("Invalid boolean environment variable: " + e.Value)
 	}
 	return ret
 }
 
 func (e EnvVar) Int() int {
-	ret, err := strconv.Atoi(e.value)
+	ret, err := strconv.Atoi(e.Value)
 	if err != nil {
-		panic("Invalid integer environment variable: " + e.value)
+		panic("Invalid integer environment variable: " + e.Value)
 	}
 	return ret
 }
 
 func (e EnvVar) Float64() float64 {
-	ret, err := strconv.ParseFloat(e.value, 64)
+	ret, err := strconv.ParseFloat(e.Value, 64)
 	if err != nil {
-		panic("Invalid float environment variable: " + e.value)
+		panic("Invalid float environment variable: " + e.Value)
 	}
 	return ret
-}
-
-type envVarOpt func(*EnvVar)
-
-func Fallback(value string) envVarOpt {
-	return func(e *EnvVar) {
-		if !e.found && AllowFallbacks() {
-			e.value = value
-		}
-	}
-}
-
-func Optional() envVarOpt {
-	return func(e *EnvVar) {
-		e.optional = true
-	}
 }
 
 // Returns true if the environment variable with the given key is set and non-empty
@@ -74,6 +94,6 @@ func Presence(key string) bool {
 	return ok && val != ""
 }
 
-func AllowFallbacks() bool {
-	return IsDev() || IsTest()
+func defaultAllowFallback() bool {
+	return !IsProd()
 }
