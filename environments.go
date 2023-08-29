@@ -39,9 +39,14 @@ func init() {
 }
 
 func updateCurrentEnv() {
-	envStr := New("ENV").
+	envStr, err := New("ENV").
 		Fallback("DEVELOPMENT", OverrideAllow(func() bool { return true })).
 		String()
+	if err != nil {
+		// This should never happen
+		panic(err)
+	}
+
 	env, ok := environments[envStr]
 	if !ok {
 		panic("Invalid environment: " + envStr)

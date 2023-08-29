@@ -1,6 +1,8 @@
 package goenvvars
 
 import (
+	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,13 +49,16 @@ func TestValidate(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
 			ev := New("TEST_VAR")
-			ev.validate()
+			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
 			ev := New("TEST_VAR")
-			assert.Panics(t, func() { ev.validate() })
+			err := ev.validate()
+			if assert.Error(t, err) {
+				assert.Equal(t, errors.New("Missing required environment variable: "+ev.key), err)
+			}
 		})
 	})
 
@@ -146,44 +151,65 @@ func TestPresence(t *testing.T) {
 
 func TestEVarString(t *testing.T) {
 	ev := envVar{key: "TEST_VAR", value: "val"}
-	assert.Equal(t, "val", ev.String())
+	actual, _ := ev.String()
+	assert.Equal(t, "val", actual)
 }
 
 func TestEVarBool(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "true"}
-		assert.True(t, ev.Bool())
+		actual, _ := ev.Bool()
+		assert.True(t, actual)
+
 		ev.value = "false"
-		assert.False(t, ev.Bool())
+		actual, _ = ev.Bool()
+		assert.False(t, actual)
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "invalid"}
-		assert.Panics(t, func() { ev.Bool() })
+		actual, err := ev.Bool()
+		if assert.Error(t, err) {
+			_, ok := err.(*strconv.NumError)
+			assert.True(t, ok)
+		}
+		assert.Equal(t, false, actual)
 	})
 }
 
 func TestEvarInt(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "123"}
-		assert.Equal(t, 123, ev.Int())
+		actual, _ := ev.Int()
+		assert.Equal(t, 123, actual)
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "invalid"}
-		assert.Panics(t, func() { ev.Int() })
+		actual, err := ev.Int()
+		if assert.Error(t, err) {
+			_, ok := err.(*strconv.NumError)
+			assert.True(t, ok)
+		}
+		assert.Equal(t, 0, actual)
 	})
 }
 
 func TestEvarFloat64(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "123.456"}
-		assert.Equal(t, 123.456, ev.Float64())
+		actual, _ := ev.Float64()
+		assert.Equal(t, 123.456, actual)
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "invalid"}
-		assert.Panics(t, func() { ev.Float64() })
+		actual, err := ev.Float64()
+		if assert.Error(t, err) {
+			_, ok := err.(*strconv.NumError)
+			assert.True(t, ok)
+		}
+		assert.Equal(t, 0.0, actual)
 	})
 }
 

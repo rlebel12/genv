@@ -1,6 +1,7 @@
 package goenvvars
 
 import (
+	"errors"
 	"os"
 	"strconv"
 )
@@ -42,36 +43,32 @@ func OverrideAllow(af func() bool) envVarOpt {
 	}
 }
 
-func (ev *envVar) String() string {
-	ev.validate()
-	return ev.value
+func (ev *envVar) String() (string, error) {
+	if err := ev.validate(); err != nil {
+		return "", err
+	}
+	return ev.value, nil
 }
 
-func (ev *envVar) Bool() bool {
-	ev.validate()
-	ret, err := strconv.ParseBool(ev.value)
-	if err != nil {
-		panic("Invalid boolean environment variable: " + ev.value)
+func (ev *envVar) Bool() (bool, error) {
+	if err := ev.validate(); err != nil {
+		return false, err
 	}
-	return ret
+	return strconv.ParseBool(ev.value)
 }
 
-func (ev *envVar) Int() int {
-	ev.validate()
-	ret, err := strconv.Atoi(ev.value)
-	if err != nil {
-		panic("Invalid integer environment variable: " + ev.value)
+func (ev *envVar) Int() (int, error) {
+	if err := ev.validate(); err != nil {
+		return 0, err
 	}
-	return ret
+	return strconv.Atoi(ev.value)
 }
 
-func (ev *envVar) Float64() float64 {
-	ev.validate()
-	ret, err := strconv.ParseFloat(ev.value, 64)
-	if err != nil {
-		panic("Invalid float environment variable: " + ev.value)
+func (ev *envVar) Float64() (float64, error) {
+	if err := ev.validate(); err != nil {
+		return 0, err
 	}
-	return ret
+	return strconv.ParseFloat(ev.value, 64)
 }
 
 // Returns true if the environment variable with the given key is set and non-empty
@@ -90,10 +87,13 @@ type envVar struct {
 
 type envVarOpt func(*envVar)
 
-func (ev *envVar) validate() {
-	if !ev.optional && ev.value == "" {
-		panic("Missing required environment variable: " + ev.key)
+func (ev *envVar) validate() error {
+	required := !ev.optional
+	empty := ev.value == ""
+	if required && empty {
+		return errors.New("Missing required environment variable: " + ev.key)
 	}
+	return nil
 }
 
 func defaultAllowFallback() bool {
