@@ -1,4 +1,4 @@
-module github.com/rlebel12/goenvvars
+module github.com/rlebel12/goenvvars/v2
 
 go 1.21.0
 
