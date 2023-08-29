@@ -1,32 +1,73 @@
-package goevars
+package goenvvars
 
 import (
 	"os"
 	"strconv"
 )
 
-type eVar string
+var DefaultAllowFallback = defaultAllowFallback
 
-// Returns the value of the environment variable with the given key.
-// If the variable is not set and fallbacks are not allowed, this function panics.
-// If the variable is not set and fallbacks are allowed, this function returns the fallback.
-func Required(key string, fallback string) eVar {
-	if value, ok := os.LookupEnv(key); ok {
-		return eVar(value)
-	} else if allowFallbacks() {
-		return eVar(fallback)
-	} else {
-		panic("Missing required environment variable: " + key)
+func New(key string, opts ...envVarOpt) *envVar {
+	ev := new(envVar)
+	ev.key = key
+	ev.allowFallback = DefaultAllowFallback
+	ev.value, ev.found = os.LookupEnv(key)
+
+	return ev
+}
+
+func (ev *envVar) Optional() *envVar {
+	ev.optional = true
+	return ev
+}
+
+func (ev *envVar) Fallback(value string, opts ...envVarOpt) *envVar {
+	for _, opt := range opts {
+		opt(ev)
+	}
+
+	if !ev.found && ev.allowFallback() {
+		ev.value = value
+	}
+	return ev
+}
+
+func OverrideAllow(af func() bool) envVarOpt {
+	return func(e *envVar) {
+		e.allowFallback = af
 	}
 }
 
-// Returns the value of the environment variable with the given key, or the fallback if it is not set
-func Optional(key string, fallback string) eVar {
-	if value, ok := os.LookupEnv(key); ok {
-		return eVar(value)
-	} else {
-		return eVar(fallback)
+func (ev *envVar) String() string {
+	ev.validate()
+	return ev.value
+}
+
+func (ev *envVar) Bool() bool {
+	ev.validate()
+	ret, err := strconv.ParseBool(ev.value)
+	if err != nil {
+		panic("Invalid boolean environment variable: " + ev.value)
 	}
+	return ret
+}
+
+func (ev *envVar) Int() int {
+	ev.validate()
+	ret, err := strconv.Atoi(ev.value)
+	if err != nil {
+		panic("Invalid integer environment variable: " + ev.value)
+	}
+	return ret
+}
+
+func (ev *envVar) Float64() float64 {
+	ev.validate()
+	ret, err := strconv.ParseFloat(ev.value, 64)
+	if err != nil {
+		panic("Invalid float environment variable: " + ev.value)
+	}
+	return ret
 }
 
 // Returns true if the environment variable with the given key is set and non-empty
@@ -35,34 +76,22 @@ func Presence(key string) bool {
 	return ok && val != ""
 }
 
-func (e eVar) String() string {
-	return string(e)
+type envVar struct {
+	key           string
+	value         string
+	found         bool
+	optional      bool
+	allowFallback func() bool
 }
 
-func (e eVar) Bool() bool {
-	ret, err := strconv.ParseBool(e.String())
-	if err != nil {
-		panic("Invalid boolean environment variable: " + e.String())
+type envVarOpt func(*envVar)
+
+func (ev *envVar) validate() {
+	if !ev.optional && ev.value == "" {
+		panic("Missing required environment variable: " + ev.key)
 	}
-	return ret
 }
 
-func (e eVar) Int() int {
-	ret, err := strconv.Atoi(e.String())
-	if err != nil {
-		panic("Invalid integer environment variable: " + e.String())
-	}
-	return ret
-}
-
-func (e eVar) Float64() float64 {
-	ret, err := strconv.ParseFloat(e.String(), 64)
-	if err != nil {
-		panic("Invalid float environment variable: " + e.String())
-	}
-	return ret
-}
-
-func allowFallbacks() bool {
-	return IsDev() || IsTest()
+func defaultAllowFallback() bool {
+	return !IsProd()
 }

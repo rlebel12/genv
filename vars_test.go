@@ -1,92 +1,208 @@
-package goevars
+package goenvvars
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-func TestRequiredProvided(t *testing.T) {
-	t.Setenv("TEST_VAR", "val")
-	assert.Equal(t, "val", string(Required("TEST_VAR", "")))
+// Helper function to test individual fields, since we cannot compare
+// functions for equality.
+func expectEnvVarEqual(t *testing.T, expected, actual *envVar) {
+	assert := assert.New(t)
+	assert.Equal(expected.key, actual.key)
+	assert.Equal(expected.value, actual.value)
+	assert.Equal(expected.found, actual.found)
+	assert.Equal(expected.optional, actual.optional)
 }
 
-func TestRequiredAllowFallback(t *testing.T) {
-	assert.Equal(t, "fallback", string(Required("TEST_VAR", "fallback")))
+func TestNew(t *testing.T) {
+	t.Run("Defined", func(t *testing.T) {
+		t.Setenv("TEST_VAR", "val")
+		actual := New("TEST_VAR")
+		expected := &envVar{
+			key:      "TEST_VAR",
+			value:    "val",
+			found:    true,
+			optional: false,
+		}
+		expectEnvVarEqual(t, expected, actual)
+	})
+
+	t.Run("Undefined", func(t *testing.T) {
+		actual := New("TEST_VAR")
+		expected := &envVar{
+			key:      "TEST_VAR",
+			value:    "",
+			found:    false,
+			optional: false,
+		}
+		expectEnvVarEqual(t, expected, actual)
+	})
 }
 
-func TestRequiredDisallowFallback(t *testing.T) {
-	t.Setenv("ENV", "PRODUCTION")
-	updateCurrentEnv()
-	assert.Panics(t, func() { Required("TEST_VAR", "") })
+func TestValidate(t *testing.T) {
+	t.Run("Required", func(t *testing.T) {
+		t.Run("Present", func(t *testing.T) {
+			t.Setenv("TEST_VAR", "val")
+			ev := New("TEST_VAR")
+			ev.validate()
+		})
+
+		t.Run("Absent", func(t *testing.T) {
+			t.Setenv("TEST_VAR", "")
+			ev := New("TEST_VAR")
+			assert.Panics(t, func() { ev.validate() })
+		})
+	})
+
+	t.Run("Optional", func(t *testing.T) {
+		t.Run("Present", func(t *testing.T) {
+			t.Setenv("TEST_VAR", "val")
+			ev := New("TEST_VAR").Optional()
+			ev.validate()
+		})
+
+		t.Run("Absent", func(t *testing.T) {
+			t.Setenv("TEST_VAR", "")
+			ev := New("TEST_VAR").Optional()
+			ev.validate()
+		})
+	})
 }
 
-func TestOptionalProvided(t *testing.T) {
-	t.Setenv("TEST_VAR", "val")
-	assert.Equal(t, "val", string(Optional("TEST_VAR", "fallback")))
+func TestOptional(t *testing.T) {
+	t.Run("Required", func(t *testing.T) {
+		ev := New("TEST_VAR")
+		assert.Equal(t, false, ev.optional)
+	})
+
+	t.Run("Optional", func(t *testing.T) {
+		ev := New("TEST_VAR").Optional()
+		assert.Equal(t, true, ev.optional)
+	})
 }
 
-func TestOptionalAllowFallback(t *testing.T) {
-	assert.Equal(t, "fallback", string(Optional("TEST_VAR", "fallback")))
+type MockFallbackOpt struct {
+	mock.Mock
 }
 
-func TestPresencePresent(t *testing.T) {
-	t.Setenv("TEST_VAR", "val")
-	assert.True(t, Presence("TEST_VAR"))
+func (m *MockFallbackOpt) optFunc() {
+	_ = m.Called()
+	return
 }
 
-func TestPresenceAbsent(t *testing.T) {
-	assert.False(t, Presence("TEST_VAR"))
+func fallbackOptForTest(m *MockFallbackOpt) envVarOpt {
+	return func(e *envVar) {
+		m.optFunc()
+	}
 }
 
-func TestPresenceEmpty(t *testing.T) {
-	t.Setenv("TEST_VAR", "")
-	assert.False(t, Presence("TEST_VAR"))
+func TestFallback(t *testing.T) {
+	t.Run("Options", func(t *testing.T) {
+		opt := new(MockFallbackOpt)
+		opt.On("optFunc")
+		New("TEST_VAR").Fallback("fallback", fallbackOptForTest(opt))
+		opt.AssertExpectations(t)
+	})
+
+	t.Run("Found", func(t *testing.T) {
+		t.Setenv("TEST_VAR", "val")
+		ev := New("TEST_VAR").Fallback("fallback")
+		assert.Equal(t, "val", ev.value)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		t.Run("AllowFallback", func(t *testing.T) {
+			ev := New("TEST_VAR").
+				Fallback("fallback", OverrideAllow(func() bool { return true }))
+			assert.Equal(t, "fallback", ev.value)
+		})
+
+		t.Run("DisallowFallback", func(t *testing.T) {
+			ev := New("TEST_VAR").
+				Fallback("fallback", OverrideAllow(func() bool { return false }))
+			assert.Equal(t, "", ev.value)
+		})
+	})
+}
+
+func TestPresence(t *testing.T) {
+	t.Run("Present", func(t *testing.T) {
+		t.Setenv("TEST_VAR", "val")
+		assert.True(t, Presence("TEST_VAR"))
+	})
+
+	t.Run("Absent", func(t *testing.T) {
+		assert.False(t, Presence("TEST_VAR"))
+	})
+
+	t.Run("Empty", func(t *testing.T) {
+		t.Setenv("TEST_VAR", "")
+		assert.False(t, Presence("TEST_VAR"))
+	})
 }
 
 func TestEVarString(t *testing.T) {
-	assert.Equal(t, "val", eVar("val").String())
+	ev := envVar{key: "TEST_VAR", value: "val"}
+	assert.Equal(t, "val", ev.String())
 }
 
-func TestEvarBoolValid(t *testing.T) {
-	assert.True(t, eVar("true").Bool())
-	assert.False(t, eVar("false").Bool())
+func TestEVarBool(t *testing.T) {
+	t.Run(("Valid"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: "true"}
+		assert.True(t, ev.Bool())
+		ev.value = "false"
+		assert.False(t, ev.Bool())
+	})
+
+	t.Run(("Invalid"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: "invalid"}
+		assert.Panics(t, func() { ev.Bool() })
+	})
 }
 
-func TestEvarBoolInvalid(t *testing.T) {
-	assert.Panics(t, func() { eVar("invalid").Bool() })
+func TestEvarInt(t *testing.T) {
+	t.Run(("Valid"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: "123"}
+		assert.Equal(t, 123, ev.Int())
+	})
+
+	t.Run(("Invalid"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: "invalid"}
+		assert.Panics(t, func() { ev.Int() })
+	})
 }
 
-func TestEvarIntValid(t *testing.T) {
-	assert.Equal(t, 123, eVar("123").Int())
+func TestEvarFloat64(t *testing.T) {
+	t.Run(("Valid"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: "123.456"}
+		assert.Equal(t, 123.456, ev.Float64())
+	})
+
+	t.Run(("Invalid"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: "invalid"}
+		assert.Panics(t, func() { ev.Float64() })
+	})
 }
 
-func TestEvarIntInvalid(t *testing.T) {
-	assert.Panics(t, func() { eVar("invalid").Int() })
-}
+func TestDefaultAllowFallback(t *testing.T) {
+	t.Run("Dev", func(t *testing.T) {
+		t.Setenv("ENV", "DEVELOPMENT")
+		updateCurrentEnv()
+		assert.True(t, defaultAllowFallback())
+	})
 
-func TestEvarFloat64Valid(t *testing.T) {
-	assert.Equal(t, 123.456, eVar("123.456").Float64())
-}
+	t.Run("Test", func(t *testing.T) {
+		t.Setenv("ENV", "TEST")
+		updateCurrentEnv()
+		assert.True(t, defaultAllowFallback())
+	})
 
-func TestEvarFloat64Invalid(t *testing.T) {
-	assert.Panics(t, func() { eVar("invalid").Float64() })
-}
-
-func TestAllowFallbacksDev(t *testing.T) {
-	t.Setenv("ENV", "DEVELOPMENT")
-	updateCurrentEnv()
-	assert.True(t, allowFallbacks())
-}
-
-func TestAllowFallbacksTest(t *testing.T) {
-	t.Setenv("ENV", "TEST")
-	updateCurrentEnv()
-	assert.True(t, allowFallbacks())
-}
-
-func TestAllowFallbacksProd(t *testing.T) {
-	t.Setenv("ENV", "PRODUCTION")
-	updateCurrentEnv()
-	assert.False(t, allowFallbacks())
+	t.Run("Prod", func(t *testing.T) {
+		t.Setenv("ENV", "PRODUCTION")
+		updateCurrentEnv()
+		assert.False(t, defaultAllowFallback())
+	})
 }
