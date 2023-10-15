@@ -72,7 +72,7 @@ var FallbackVar = ev.New("FALLBACK_VAR").
 This approach takes priority over the global override.
 
 ### Combining Options
-Options can be chained together and combined. For example, it is possibly to declare than an environment variable is both
+Options can be chained together and combined. For example, it is possible to declare that an environment variable is both
 optional and has a fallback value. This means that the fallback value will be used if allowed and necessary, and the program
 will not panic if the final value is still absent.
 
