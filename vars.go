@@ -45,6 +45,9 @@ func (ev *envVar) String() string {
 
 func (ev *envVar) Bool() bool {
 	ev.validate()
+	if ev.value == "" {
+		return false
+	}
 	ret, err := strconv.ParseBool(ev.value)
 	if err != nil {
 		panic("Invalid boolean environment variable: " + ev.value)

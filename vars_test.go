@@ -161,6 +161,11 @@ func TestEVarBool(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.Bool() })
 	})
+
+	t.Run(("Optional"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: ""}
+		assert.False(t, ev.Optional().Bool())
+	})
 }
 
 func TestEvarInt(t *testing.T) {
