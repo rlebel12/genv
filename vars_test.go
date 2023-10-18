@@ -173,6 +173,11 @@ func TestEvarInt(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.Int() })
 	})
+
+	t.Run(("Optional"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: ""}
+		assert.Equal(t, 0, ev.Optional().Int())
+	})
 }
 
 func TestEvarFloat64(t *testing.T) {
@@ -184,6 +189,11 @@ func TestEvarFloat64(t *testing.T) {
 	t.Run(("Invalid"), func(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.Float64() })
+	})
+
+	t.Run(("Optional"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: ""}
+		assert.Equal(t, 0.0, ev.Optional().Float64())
 	})
 }
 

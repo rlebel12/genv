@@ -54,6 +54,9 @@ func (ev *envVar) Bool() bool {
 
 func (ev *envVar) Int() int {
 	ev.validate()
+	if ev.value == "" {
+		return 0
+	}
 	ret, err := strconv.Atoi(ev.value)
 	if err != nil {
 		panic("Invalid integer environment variable: " + ev.value)
@@ -63,6 +66,9 @@ func (ev *envVar) Int() int {
 
 func (ev *envVar) Float64() float64 {
 	ev.validate()
+	if ev.value == "" {
+		return 0
+	}
 	ret, err := strconv.ParseFloat(ev.value, 64)
 	if err != nil {
 		panic("Invalid float environment variable: " + ev.value)
