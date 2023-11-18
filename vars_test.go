@@ -202,6 +202,27 @@ func TestEvarFloat64(t *testing.T) {
 	})
 }
 
+func TestEvarURL(t *testing.T) {
+	t.Run(("Valid"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: "http://example.com:8080"}
+		url := ev.URL()
+		assert.Equal(t, "http", url.Scheme)
+		assert.Equal(t, "example.com", url.Hostname())
+		assert.Equal(t, "8080", url.Port())
+		assert.Equal(t, "http://example.com:8080", ev.URL().String())
+	})
+
+	t.Run(("Invalid"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: "http://invalid url"}
+		assert.Panics(t, func() { ev.URL() })
+	})
+
+	t.Run(("Optional"), func(t *testing.T) {
+		ev := envVar{key: "TEST_VAR", value: ""}
+		assert.Equal(t, "", ev.Optional().URL().String())
+	})
+}
+
 func TestDefaultAllowFallback(t *testing.T) {
 	t.Run("Dev", func(t *testing.T) {
 		t.Setenv("ENV", "DEVELOPMENT")

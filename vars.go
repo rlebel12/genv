@@ -1,6 +1,7 @@
 package goenvvars
 
 import (
+	"net/url"
 	"os"
 	"strconv"
 )
@@ -75,6 +76,22 @@ func (ev *envVar) Float64() float64 {
 	ret, err := strconv.ParseFloat(ev.value, 64)
 	if err != nil {
 		panic("Invalid float environment variable: " + ev.value)
+	}
+	return ret
+}
+
+// Returns the value of the environment variable as a URL.
+// Panics if the value is not a valid URL, but this may happen
+// if a scheme is not specified. See the documentation for
+// url.Parse for more information.
+func (ev *envVar) URL() *url.URL {
+	ev.validate()
+	if ev.value == "" {
+		return &url.URL{}
+	}
+	ret, err := url.Parse(ev.value)
+	if err != nil {
+		panic("Invalid URL environment variable: " + ev.value)
 	}
 	return ret
 }

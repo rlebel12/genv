@@ -30,6 +30,7 @@ var StringVar = ev.New("STRING_VAR").String()
 var BoolVar = ev.New("BOOL_VAR").Bool()
 var IntVar = ev.New("INT_VAR").Int()
 var FloatVar = ev.New("FLOAT_VAR").Float()
+var URLVar = ev.New("URL_VAR").URL()
 ```
 
 If the value from an environment variable cannot be parsed into the specified type, the function will panic.
