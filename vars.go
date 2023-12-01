@@ -26,24 +26,34 @@ func (ev *envVar) Optional() *envVar {
 	return ev
 }
 
-func (ev *envVar) Fallback(value string, opts ...envVarOpt) *envVar {
-	for _, opt := range opts {
-		opt(ev)
+type fallback struct {
+	allow bool
+}
+
+type fallbackOpt func(*fallback)
+
+func (ev *envVar) Fallback(value string, opts ...fallbackOpt) *envVar {
+	fb := &fallback{
+		allow: ev.allowFallback(),
 	}
 
-	if !ev.found && ev.allowFallback() {
+	for _, opt := range opts {
+		opt(fb)
+	}
+
+	if !ev.found && fb.allow {
 		ev.value = value
 	}
 	return ev
 }
 
-func OverrideAllow(af func() bool) envVarOpt {
-	return func(e *envVar) {
-		e.allowFallback = af
+func OverrideAllow(allow func() bool) fallbackOpt {
+	return func(f *fallback) {
+		f.allow = allow()
 	}
 }
 
-func AllowAlways() envVarOpt {
+func AllowAlways() fallbackOpt {
 	return OverrideAllow(func() bool {
 		return true
 	})

@@ -110,8 +110,8 @@ func (m *MockFallbackOpt) optFunc() {
 	return
 }
 
-func fallbackOptForTest(m *MockFallbackOpt) envVarOpt {
-	return func(e *envVar) {
+func fallbackOptForTest(m *MockFallbackOpt) fallbackOpt {
+	return func(fb *fallback) {
 		m.optFunc()
 	}
 }
