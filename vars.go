@@ -43,6 +43,12 @@ func OverrideAllow(af func() bool) envVarOpt {
 	}
 }
 
+func AllowAlways() envVarOpt {
+	return OverrideAllow(func() bool {
+		return true
+	})
+}
+
 func (ev *envVar) String() string {
 	ev.validate()
 	return ev.value

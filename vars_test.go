@@ -145,6 +145,12 @@ func TestFallback(t *testing.T) {
 	})
 }
 
+func TestAllowAlways(t *testing.T) {
+	DefaultAllowFallback = func() bool { return false }
+	actual := New("TEST_VAR").Fallback("fallback", AllowAlways()).String()
+	assert.Equal(t, "fallback", actual)
+}
+
 func TestPresence(t *testing.T) {
 	t.Run("Present", func(t *testing.T) {
 		t.Setenv("TEST_VAR", "val")
