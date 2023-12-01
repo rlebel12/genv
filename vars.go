@@ -14,6 +14,10 @@ func New(key string, opts ...envVarOpt) *envVar {
 	ev.allowFallback = DefaultAllowFallback
 	ev.value, ev.found = os.LookupEnv(key)
 
+	for _, opt := range opts {
+		opt(ev)
+	}
+
 	return ev
 }
 

@@ -40,6 +40,23 @@ func TestNew(t *testing.T) {
 		}
 		expectEnvVarEqual(t, expected, actual)
 	})
+
+	t.Run("Options", func(t *testing.T) {
+		value_opt := func(e *envVar) {
+			e.value = "opts"
+		}
+		found_opt := func(e *envVar) {
+			e.found = true
+		}
+		actual := New("TEST_VAR", value_opt, found_opt)
+		expected := &envVar{
+			key:      "TEST_VAR",
+			value:    "opts",
+			found:    true,
+			optional: false,
+		}
+		expectEnvVarEqual(t, expected, actual)
+	})
 }
 
 func TestValidate(t *testing.T) {
