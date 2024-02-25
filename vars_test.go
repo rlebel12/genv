@@ -7,56 +7,43 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// Helper function to test individual fields, since we cannot compare
-// functions for equality.
-func expectEnvVarEqual(t *testing.T, expected, actual *envVar) {
-	assert := assert.New(t)
-	assert.Equal(expected.key, actual.key)
-	assert.Equal(expected.value, actual.value)
-	assert.Equal(expected.found, actual.found)
-	assert.Equal(expected.optional, actual.optional)
-}
-
-func TestNew(t *testing.T) {
-	t.Run("Defined", func(t *testing.T) {
-		t.Setenv("TEST_VAR", "val")
-		actual := New("TEST_VAR")
-		expected := &envVar{
-			key:      "TEST_VAR",
-			value:    "val",
-			found:    true,
-			optional: false,
-		}
-		expectEnvVarEqual(t, expected, actual)
-	})
-
-	t.Run("Undefined", func(t *testing.T) {
-		actual := New("TEST_VAR")
-		expected := &envVar{
-			key:      "TEST_VAR",
-			value:    "",
-			found:    false,
-			optional: false,
-		}
-		expectEnvVarEqual(t, expected, actual)
-	})
-
-	t.Run("Options", func(t *testing.T) {
-		value_opt := func(e *envVar) {
-			e.value = "opts"
-		}
-		found_opt := func(e *envVar) {
-			e.found = true
-		}
-		actual := New("TEST_VAR", value_opt, found_opt)
-		expected := &envVar{
-			key:      "TEST_VAR",
-			value:    "opts",
-			found:    true,
-			optional: false,
-		}
-		expectEnvVarEqual(t, expected, actual)
-	})
+func TestConstructor(t *testing.T) {
+	for name, test := range map[string]struct {
+		fn func(string, ...envVarOpt) *envVar
+	}{
+		"New": {New},
+		"Env": {Env},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fn := test.fn
+			for name, test := range map[string]struct {
+				value         string
+				opts          []envVarOpt
+				expectedValue string
+				expectedFound bool
+			}{
+				"Defined":     {"val", nil, "val", true},
+				"Undefined":   {"", nil, "", false},
+				"WithOptions": {"val", []envVarOpt{func(e *envVar) { e.value = "opts" }}, "opts", true},
+			} {
+				t.Run(name, func(t *testing.T) {
+					const key = "TEST_VAR"
+					if test.value != "" {
+						t.Setenv(key, test.value)
+					}
+					actual := fn(key, test.opts...)
+					expected := &envVar{
+						key:   key,
+						value: test.expectedValue,
+						found: test.expectedFound,
+					}
+					// We cannot test function equality
+					expected.allowFallback, actual.allowFallback = nil, nil
+					assert.Equal(t, *expected, *actual)
+				})
+			}
+		})
+	}
 }
 
 func TestValidate(t *testing.T) {
@@ -107,48 +94,64 @@ type MockFallbackOpt struct {
 
 func (m *MockFallbackOpt) optFunc() {
 	_ = m.Called()
-	return
 }
 
-func fallbackOptForTest(m *MockFallbackOpt) fallbackOpt {
-	return func(fb *fallback) {
-		m.optFunc()
+func TestFallingBack(t *testing.T) {
+	for name, test := range map[string]struct {
+		fn func(ev *envVar, value string, opts ...fallbackOpt) *envVar
+	}{
+		"Fallback": {(*envVar).Fallback},
+		"Default":  {(*envVar).Default},
+	} {
+		fn := test.fn
+		t.Run(name, func(t *testing.T) {
+			allow := OverrideAllow(func() bool { return true })
+			disallow := OverrideAllow(func() bool { return false })
+			for name, test := range map[string]struct {
+				found         bool
+				opts          []fallbackOpt
+				expectedValue string
+			}{
+				"Found":              {true, nil, "val"},
+				"FoundAllowed":       {true, []fallbackOpt{allow}, "val"},
+				"FoundDisallowed":    {true, []fallbackOpt{disallow}, "val"},
+				"NotFound":           {false, nil, "fallback"},
+				"NotFoundAllowed":    {false, []fallbackOpt{allow}, "fallback"},
+				"NotFoundDisallowed": {false, []fallbackOpt{disallow}, ""},
+			} {
+				t.Run(name, func(t *testing.T) {
+					if test.found {
+						t.Setenv("TEST_VAR", "val")
+					}
+
+					customOpt := new(MockFallbackOpt)
+					customOpt.On("optFunc")
+					opts := []fallbackOpt{func(fb *fallback) { customOpt.optFunc() }}
+					opts = append(opts, test.opts...)
+
+					actual := fn(New("TEST_VAR"), "fallback", opts...)
+					assert.Equal(t, test.expectedValue, actual.value)
+					customOpt.AssertExpectations(t)
+				})
+			}
+		})
+
+		for name, test := range map[string]struct {
+			found         bool
+			expectedValue string
+		}{
+			"Found":    {true, "val"},
+			"NotFound": {false, "fallback"},
+		} {
+			t.Run(name, func(t *testing.T) {
+				if test.found {
+					t.Setenv("TEST_VAR", "val")
+				}
+				actual := fn(New("TEST_VAR"), "fallback", AllowAlways()).value
+				assert.Equal(t, test.expectedValue, actual)
+			})
+		}
 	}
-}
-
-func TestFallback(t *testing.T) {
-	t.Run("Options", func(t *testing.T) {
-		opt := new(MockFallbackOpt)
-		opt.On("optFunc")
-		New("TEST_VAR").Fallback("fallback", fallbackOptForTest(opt))
-		opt.AssertExpectations(t)
-	})
-
-	t.Run("Found", func(t *testing.T) {
-		t.Setenv("TEST_VAR", "val")
-		ev := New("TEST_VAR").Fallback("fallback")
-		assert.Equal(t, "val", ev.value)
-	})
-
-	t.Run("NotFound", func(t *testing.T) {
-		t.Run("AllowFallback", func(t *testing.T) {
-			ev := New("TEST_VAR").
-				Fallback("fallback", OverrideAllow(func() bool { return true }))
-			assert.Equal(t, "fallback", ev.value)
-		})
-
-		t.Run("DisallowFallback", func(t *testing.T) {
-			ev := New("TEST_VAR").
-				Fallback("fallback", OverrideAllow(func() bool { return false }))
-			assert.Equal(t, "", ev.value)
-		})
-	})
-}
-
-func TestAllowAlways(t *testing.T) {
-	DefaultAllowFallback = func() bool { return false }
-	actual := New("TEST_VAR").Fallback("fallback", AllowAlways()).String()
-	assert.Equal(t, "fallback", actual)
 }
 
 func TestPresence(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 
 var DefaultAllowFallback = defaultAllowFallback
 
+// Returns a new environment variable with the given key.
 func New(key string, opts ...envVarOpt) *envVar {
 	ev := new(envVar)
 	ev.key = key
@@ -22,6 +23,11 @@ func New(key string, opts ...envVarOpt) *envVar {
 	return ev
 }
 
+// Returns a new environment variable with the given key. Alias for New.
+func Env(key string, opts ...envVarOpt) *envVar {
+	return New(key, opts...)
+}
+
 func (ev *envVar) Optional() *envVar {
 	ev.optional = true
 	return ev
@@ -33,6 +39,7 @@ type fallback struct {
 
 type fallbackOpt func(*fallback)
 
+// Sets the default value for the environment variable if not present.
 func (ev *envVar) Fallback(value string, opts ...fallbackOpt) *envVar {
 	fb := &fallback{
 		allow: ev.allowFallback(),
@@ -46,6 +53,11 @@ func (ev *envVar) Fallback(value string, opts ...fallbackOpt) *envVar {
 		ev.value = value
 	}
 	return ev
+}
+
+// Sets the default value for the environment variable if not present. Alias for Fallback.
+func (ev *envVar) Default(value string, opts ...fallbackOpt) *envVar {
+	return ev.Fallback(value, opts...)
 }
 
 func OverrideAllow(allow func() bool) fallbackOpt {
