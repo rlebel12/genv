@@ -9,10 +9,10 @@ import (
 
 func TestConstructor(t *testing.T) {
 	for name, test := range map[string]struct {
-		fn func(string, ...envVarOpt) *envVar
+		fn func(ev *Genv, key string, opts ...envVarOpt) *envVar
 	}{
-		"New": {New},
-		"Env": {Env},
+		"New": {(*Genv).New},
+		"Env": {(*Genv).Env},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fn := test.fn
@@ -31,7 +31,8 @@ func TestConstructor(t *testing.T) {
 					if test.value != "" {
 						t.Setenv(key, test.value)
 					}
-					actual := fn(key, test.opts...)
+					genv, _ := NewGenv()
+					actual := fn(genv, key, test.opts...)
 					expected := &envVar{
 						key:   key,
 						value: test.expectedValue,
@@ -50,13 +51,15 @@ func TestValidate(t *testing.T) {
 	t.Run("Required", func(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
-			ev := New("TEST_VAR")
+			genv, _ := NewGenv()
+			ev := genv.New("TEST_VAR")
 			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
-			ev := New("TEST_VAR")
+			genv, _ := NewGenv()
+			ev := genv.New("TEST_VAR")
 			assert.Error(t, ev.validate())
 		})
 	})
@@ -64,13 +67,15 @@ func TestValidate(t *testing.T) {
 	t.Run("Optional", func(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
-			ev := New("TEST_VAR").Optional()
+			genv, _ := NewGenv()
+			ev := genv.New("TEST_VAR").Optional()
 			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
-			ev := New("TEST_VAR").Optional()
+			genv, _ := NewGenv()
+			ev := genv.New("TEST_VAR").Optional()
 			assert.Nil(t, ev.validate())
 		})
 	})
@@ -78,12 +83,14 @@ func TestValidate(t *testing.T) {
 
 func TestOptional(t *testing.T) {
 	t.Run("Required", func(t *testing.T) {
-		ev := New("TEST_VAR")
+		genv, _ := NewGenv()
+		ev := genv.New("TEST_VAR")
 		assert.Equal(t, false, ev.optional)
 	})
 
 	t.Run("Optional", func(t *testing.T) {
-		ev := New("TEST_VAR").Optional()
+		genv, _ := NewGenv()
+		ev := genv.New("TEST_VAR").Optional()
 		assert.Equal(t, true, ev.optional)
 	})
 }
@@ -120,6 +127,9 @@ func TestFallingBack(t *testing.T) {
 				"NotFoundDisallowed": {false, []fallbackOpt{disallow}, ""},
 			} {
 				t.Run(name, func(t *testing.T) {
+					genv, err := NewGenv(DefaultAllowFallback(func() bool { return true }))
+					assert.NoError(t, err)
+
 					if test.found {
 						t.Setenv("TEST_VAR", "val")
 					}
@@ -128,8 +138,11 @@ func TestFallingBack(t *testing.T) {
 					customOpt.On("optFunc")
 					opts := []fallbackOpt{func(fb *fallback) { customOpt.optFunc() }}
 					opts = append(opts, test.opts...)
-
-					actual := fn(New("TEST_VAR"), "fallback", opts...)
+					actual := fn(
+						genv.New("TEST_VAR"),
+						"fallback",
+						opts...,
+					)
 					assert.Equal(t, test.expectedValue, actual.value)
 					customOpt.AssertExpectations(t)
 				})
@@ -147,7 +160,8 @@ func TestFallingBack(t *testing.T) {
 				if test.found {
 					t.Setenv("TEST_VAR", "val")
 				}
-				actual := fn(New("TEST_VAR"), "fallback", AllowAlways()).value
+				genv, _ := NewGenv()
+				actual := fn(genv.New("TEST_VAR"), "fallback", AllowAlways()).value
 				assert.Equal(t, test.expectedValue, actual)
 			})
 		}
@@ -383,19 +397,19 @@ func TestEvarTryURL(t *testing.T) {
 func TestDefaultAllowFallback(t *testing.T) {
 	t.Run("Dev", func(t *testing.T) {
 		t.Setenv("ENV", "DEVELOPMENT")
-		updateCurrentEnv()
-		assert.True(t, defaultAllowFallback())
+		genv, _ := NewGenv()
+		assert.True(t, genv.defaultAllowFallback())
 	})
 
 	t.Run("Test", func(t *testing.T) {
 		t.Setenv("ENV", "TEST")
-		updateCurrentEnv()
-		assert.True(t, defaultAllowFallback())
+		genv, _ := NewGenv()
+		assert.True(t, genv.defaultAllowFallback())
 	})
 
 	t.Run("Prod", func(t *testing.T) {
 		t.Setenv("ENV", "PRODUCTION")
-		updateCurrentEnv()
-		assert.False(t, defaultAllowFallback())
+		genv, _ := NewGenv()
+		assert.False(t, genv.defaultAllowFallback())
 	})
 }

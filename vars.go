@@ -7,13 +7,37 @@ import (
 	"strconv"
 )
 
-var DefaultAllowFallback = defaultAllowFallback
+type Genv struct {
+	defaultAllowFallback func() bool
+	environment          environment
+}
+
+func NewGenv(opts ...genvOpt) (*Genv, error) {
+	genv := new(Genv)
+	environment, err := newEnvironment(genv)
+	if err != nil {
+		return nil, fmt.Errorf("invalid environment: %w", err)
+	}
+
+	genv.environment = environment
+	genv.defaultAllowFallback = environment.defaultAllowFallback
+	for _, opt := range opts {
+		opt(genv)
+	}
+	return genv, nil
+}
+
+func DefaultAllowFallback(allow func() bool) genvOpt {
+	return func(genv *Genv) {
+		genv.defaultAllowFallback = allow
+	}
+}
 
 // Returns a new environment variable with the given key.
-func New(key string, opts ...envVarOpt) *envVar {
+func (genv *Genv) New(key string, opts ...envVarOpt) *envVar {
 	ev := new(envVar)
 	ev.key = key
-	ev.allowFallback = DefaultAllowFallback
+	ev.allowFallback = genv.defaultAllowFallback
 	ev.value, ev.found = os.LookupEnv(key)
 
 	for _, opt := range opts {
@@ -24,8 +48,16 @@ func New(key string, opts ...envVarOpt) *envVar {
 }
 
 // Returns a new environment variable with the given key. Alias for New.
-func Env(key string, opts ...envVarOpt) *envVar {
-	return New(key, opts...)
+func (genv *Genv) Env(key string, opts ...envVarOpt) *envVar {
+	return genv.New(key, opts...)
+}
+
+type envVar struct {
+	key           string
+	value         string
+	found         bool
+	optional      bool
+	allowFallback func() bool
 }
 
 func (ev *envVar) Optional() *envVar {
@@ -39,10 +71,16 @@ type fallback struct {
 
 type fallbackOpt func(*fallback)
 
+// Sets the default value for the environment variable if not present. Alias for Fallback.
+func (ev *envVar) Default(value string, opts ...fallbackOpt) *envVar {
+	return ev.Fallback(value, opts...)
+}
+
 // Sets the default value for the environment variable if not present.
 func (ev *envVar) Fallback(value string, opts ...fallbackOpt) *envVar {
-	fb := &fallback{
-		allow: ev.allowFallback(),
+	fb := new(fallback)
+	if ev.allowFallback != nil {
+		fb.allow = ev.allowFallback()
 	}
 
 	for _, opt := range opts {
@@ -53,11 +91,6 @@ func (ev *envVar) Fallback(value string, opts ...fallbackOpt) *envVar {
 		ev.value = value
 	}
 	return ev
-}
-
-// Sets the default value for the environment variable if not present. Alias for Fallback.
-func (ev *envVar) Default(value string, opts ...fallbackOpt) *envVar {
-	return ev.Fallback(value, opts...)
 }
 
 func OverrideAllow(allow func() bool) fallbackOpt {
@@ -189,23 +222,13 @@ func Presence(key string) bool {
 	return ok && val != ""
 }
 
-type envVar struct {
-	key           string
-	value         string
-	found         bool
-	optional      bool
-	allowFallback func() bool
-}
-
 type envVarOpt func(*envVar)
 
 func (ev *envVar) validate() error {
 	if !ev.optional && ev.value == "" {
-		return fmt.Errorf("Missing required environment variable: %s", ev.key)
+		return fmt.Errorf("missing required environment variable: %s", ev.key)
 	}
 	return nil
 }
 
-func defaultAllowFallback() bool {
-	return !IsProd()
-}
+type genvOpt func(*Genv)
