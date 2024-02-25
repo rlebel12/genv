@@ -7,6 +7,22 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+func TestNewGenv(t *testing.T) {
+	t.Run("Valid", func(t *testing.T) {
+		genv, err := NewGenv()
+		assert.NoError(t, err)
+		assert.NotNil(t, genv)
+		assert.True(t, genv.defaultAllowFallback())
+	})
+
+	t.Run("InvalidEnvironment", func(t *testing.T) {
+		t.Setenv("ENV", "INVALID")
+		_, err := NewGenv()
+		assert.Error(t, err)
+	})
+
+}
+
 func TestConstructor(t *testing.T) {
 	for name, test := range map[string]struct {
 		fn func(ev *Genv, key string, opts ...envVarOpt) *envVar
@@ -43,6 +59,60 @@ func TestConstructor(t *testing.T) {
 					assert.Equal(t, *expected, *actual)
 				})
 			}
+		})
+	}
+}
+
+func TestIsDev(t *testing.T) {
+	for name, test := range map[string]struct {
+		env      environment
+		expected bool
+	}{
+		"Dev":  {Dev, true},
+		"Prod": {Prod, false},
+		"Test": {Test, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			genv, err := NewGenv()
+			genv.environment = test.env
+			assert.NoError(t, err)
+			assert.Equal(t, test.expected, genv.IsDev())
+		})
+	}
+}
+
+func TestIsProd(t *testing.T) {
+	for name, test := range map[string]struct {
+		env      environment
+		expected bool
+	}{
+		"Dev":  {Dev, false},
+		"Prod": {Prod, true},
+		"Test": {Test, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			genv, err := NewGenv()
+			genv.environment = test.env
+			assert.NoError(t, err)
+			assert.Equal(t, test.expected, genv.IsProd())
+		})
+	}
+}
+
+func TestIsTest(t *testing.T) {
+	for name, test := range map[string]struct {
+		env      environment
+		expected bool
+	}{
+		"Dev":  {Dev, false},
+		"Prod": {Prod, false},
+		"Test": {Test, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			genv, err := NewGenv()
+			genv.environment = test.env
+			assert.NoError(t, err)
+			assert.Equal(t, test.expected, genv.IsTest())
 		})
 	}
 }
@@ -392,24 +462,4 @@ func TestEvarTryURL(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestDefaultAllowFallback(t *testing.T) {
-	t.Run("Dev", func(t *testing.T) {
-		t.Setenv("ENV", "DEVELOPMENT")
-		genv, _ := NewGenv()
-		assert.True(t, genv.defaultAllowFallback())
-	})
-
-	t.Run("Test", func(t *testing.T) {
-		t.Setenv("ENV", "TEST")
-		genv, _ := NewGenv()
-		assert.True(t, genv.defaultAllowFallback())
-	})
-
-	t.Run("Prod", func(t *testing.T) {
-		t.Setenv("ENV", "PRODUCTION")
-		genv, _ := NewGenv()
-		assert.False(t, genv.defaultAllowFallback())
-	})
 }

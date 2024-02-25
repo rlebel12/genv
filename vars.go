@@ -20,7 +20,7 @@ func NewGenv(opts ...genvOpt) (*Genv, error) {
 	}
 
 	genv.environment = environment
-	genv.defaultAllowFallback = environment.defaultAllowFallback
+	genv.defaultAllowFallback = func() bool { return !genv.IsProd() }
 	for _, opt := range opts {
 		opt(genv)
 	}
@@ -50,6 +50,18 @@ func (genv *Genv) New(key string, opts ...envVarOpt) *envVar {
 // Returns a new environment variable with the given key. Alias for New.
 func (genv *Genv) Env(key string, opts ...envVarOpt) *envVar {
 	return genv.New(key, opts...)
+}
+
+func (genv *Genv) IsDev() bool {
+	return genv.environment == Dev
+}
+
+func (genv *Genv) IsProd() bool {
+	return genv.environment == Prod
+}
+
+func (genv *Genv) IsTest() bool {
+	return genv.environment == Test
 }
 
 type envVar struct {

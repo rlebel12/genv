@@ -24,22 +24,6 @@ func newEnvironment(genv *Genv) (environment, error) {
 	return env, nil
 }
 
-func (e environment) IsDev() bool {
-	return e == Dev
-}
-
-func (e environment) IsProd() bool {
-	return e == Prod
-}
-
-func (e environment) IsTest() bool {
-	return e == Test
-}
-
-func (e environment) defaultAllowFallback() bool {
-	return !e.IsProd()
-}
-
 func environments() map[string]environment {
 	return map[string]environment{
 		"DEVELOPMENT": Dev,
