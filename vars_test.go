@@ -64,13 +64,13 @@ func TestValidate(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
 			ev := New("TEST_VAR")
-			ev.validate()
+			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
 			ev := New("TEST_VAR")
-			assert.Panics(t, func() { ev.validate() })
+			assert.Error(t, ev.validate())
 		})
 	})
 
@@ -78,13 +78,13 @@ func TestValidate(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
 			ev := New("TEST_VAR").Optional()
-			ev.validate()
+			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
 			ev := New("TEST_VAR").Optional()
-			ev.validate()
+			assert.Nil(t, ev.validate())
 		})
 	})
 }
@@ -168,8 +168,47 @@ func TestPresence(t *testing.T) {
 }
 
 func TestEVarString(t *testing.T) {
-	ev := envVar{key: "TEST_VAR", value: "val"}
-	assert.Equal(t, "val", ev.String())
+	for _, test := range []struct {
+		name     string
+		value    string
+		expected string
+		panics   bool
+	}{
+		{"Valid", "val", "val", false},
+		{"Invalid", "", "", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ev := envVar{key: "TEST_VAR", value: test.value}
+			if test.panics {
+				assert.Panics(t, func() { _ = ev.String() })
+			} else {
+				assert.Equal(t, test.expected, ev.String())
+			}
+		})
+	}
+}
+
+func TestEVarTryString(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		value    string
+		expected string
+		err      bool
+	}{
+		{"Valid", "val", "val", false},
+		{"Invalid", "", "", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ev := envVar{key: "TEST_VAR", value: test.value}
+			actual, err := ev.TryString()
+			if test.err {
+				assert.Error(t, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, test.expected, actual)
+			}
+		})
+	}
 }
 
 func TestEVarBool(t *testing.T) {
@@ -184,11 +223,31 @@ func TestEVarBool(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.Bool() })
 	})
+}
 
-	t.Run(("Optional"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: ""}
-		assert.False(t, ev.Optional().Bool())
-	})
+func TestEVarTryBool(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		value    string
+		expected bool
+		err      bool
+	}{
+		{"ValidTrue", "true", true, false},
+		{"ValidFalse", "false", false, false},
+		{"Missing", "", false, true},
+		{"Invalid", "invalid", false, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ev := envVar{key: "TEST_VAR", value: test.value}
+			actual, err := ev.TryBool()
+			if test.err {
+				assert.Error(t, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, test.expected, actual)
+			}
+		})
+	}
 }
 
 func TestEvarInt(t *testing.T) {
@@ -201,11 +260,35 @@ func TestEvarInt(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.Int() })
 	})
+}
 
-	t.Run(("Optional"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: ""}
-		assert.Equal(t, 0, ev.Optional().Int())
-	})
+func TestEvarTryInt(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		value    string
+		optional bool
+		expected int
+		err      bool
+	}{
+		{"Valid", "123", false, 123, false},
+		{"Empty", "", false, 0, true},
+		{"Optional", "", true, 0, false},
+		{"Invalid", "invalid", false, 0, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ev := envVar{key: "TEST_VAR", value: test.value}
+			if test.optional {
+				ev = *ev.Optional()
+			}
+			actual, err := ev.TryInt()
+			if test.err {
+				assert.Error(t, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, test.expected, actual)
+			}
+		})
+	}
 }
 
 func TestEvarFloat64(t *testing.T) {
@@ -218,11 +301,35 @@ func TestEvarFloat64(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.Float64() })
 	})
+}
 
-	t.Run(("Optional"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: ""}
-		assert.Equal(t, 0.0, ev.Optional().Float64())
-	})
+func TestEvarTryFloat64(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		value    string
+		optional bool
+		expected float64
+		err      bool
+	}{
+		{"Valid", "123.456", false, 123.456, false},
+		{"Empty", "", false, 0.0, true},
+		{"Optional", "", true, 0.0, false},
+		{"Invalid", "invalid", false, 0.0, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ev := envVar{key: "TEST_VAR", value: test.value}
+			if test.optional {
+				ev = *ev.Optional()
+			}
+			actual, err := ev.TryFloat64()
+			if test.err {
+				assert.Error(t, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, test.expected, actual)
+			}
+		})
+	}
 }
 
 func TestEvarURL(t *testing.T) {
@@ -239,11 +346,35 @@ func TestEvarURL(t *testing.T) {
 		ev := envVar{key: "TEST_VAR", value: "http://invalid url"}
 		assert.Panics(t, func() { ev.URL() })
 	})
+}
 
-	t.Run(("Optional"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: ""}
-		assert.Equal(t, "", ev.Optional().URL().String())
-	})
+func TestEvarTryURL(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		value    string
+		optional bool
+		expected string
+		err      bool
+	}{
+		{"Valid", "http://example.com:8080", false, "http://example.com:8080", false},
+		{"Empty", "", false, "", true},
+		{"Optional", "", true, "", false},
+		{"Invalid", "http://invalid url", false, "", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ev := envVar{key: "TEST_VAR", value: test.value}
+			if test.optional {
+				ev = *ev.Optional()
+			}
+			actual, err := ev.TryURL()
+			if test.err {
+				assert.Error(t, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, test.expected, actual.String())
+			}
+		})
+	}
 }
 
 func TestDefaultAllowFallback(t *testing.T) {
