@@ -1,6 +1,6 @@
-module github.com/rlebel12/goenvvars/v2
+module github.com/rlebel12/goenvvars/v3
 
-go 1.21.0
+go 1.22.0
 
 require github.com/stretchr/testify v1.8.4
 
