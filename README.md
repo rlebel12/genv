@@ -33,7 +33,10 @@ var FloatVar = ev.New("FLOAT_VAR").Float()
 var URLVar = ev.New("URL_VAR").URL()
 ```
 
-If the value from an environment variable cannot be parsed into the specified type, the function will panic.
+If the value from an environment variable cannot be parsed into the specified type, the function will panic. Alternatively, the `Try*` functions can be used to return an error instead of panicking.
+```go
+myVar, err := ev.New("MY_VAR").TryString()
+```
 
 ### Optional Variables
 By default, the package will panic if an environment variable is absent (either because the environment variable is not defined, or because it was set to an empty string). However, it is possible to specify that a variable is optional to prevent the panic behavior:
