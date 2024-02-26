@@ -16,7 +16,6 @@ First, ensure that the package is imported:
 import "github.com/rlebel12/goenvvars/v3"
 ```
 
-
 ### Basic
 In its most basic form, the package can be used to retrieve environment variables and then parse them into specified types:
 
@@ -83,6 +82,9 @@ var OptionalFallbackVar = genv.New("OPTIONAL_FALLBACK_VAR").
     Fallback("fallback value").
     Optional()
 ```
+
+### Example
+See the `example` package for a more complete demonstration of how this package can be used.
 
 ### Variable Presence
 It is also possible to simply check whether an environment variable has been set to a non-empty value:
