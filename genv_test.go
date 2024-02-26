@@ -63,6 +63,11 @@ func TestConstructor(t *testing.T) {
 	}
 }
 
+func TestEnvironmentKey(t *testing.T) {
+	genv, _ := NewGenv(EnvironmentKey("CUSTOM_ENV"))
+	assert.Equal(t, "CUSTOM_ENV", genv.environmentKey)
+}
+
 func TestIsDev(t *testing.T) {
 	for name, test := range map[string]struct {
 		env      environment

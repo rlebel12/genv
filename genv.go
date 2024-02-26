@@ -10,17 +10,20 @@ import (
 type Genv struct {
 	defaultAllowFallback func() bool
 	environment          environment
+	environmentKey       string
 }
 
 func NewGenv(opts ...genvOpt) (*Genv, error) {
 	genv := new(Genv)
+	genv.environmentKey = "ENV"
+	genv.defaultAllowFallback = func() bool { return !genv.IsProd() }
+
 	environment, err := newEnvironment(genv)
 	if err != nil {
 		return nil, fmt.Errorf("invalid environment: %w", err)
 	}
-
 	genv.environment = environment
-	genv.defaultAllowFallback = func() bool { return !genv.IsProd() }
+
 	for _, opt := range opts {
 		opt(genv)
 	}
@@ -30,6 +33,12 @@ func NewGenv(opts ...genvOpt) (*Genv, error) {
 func DefaultAllowFallback(allow func() bool) genvOpt {
 	return func(genv *Genv) {
 		genv.defaultAllowFallback = allow
+	}
+}
+
+func EnvironmentKey(key string) genvOpt {
+	return func(genv *Genv) {
+		genv.environmentKey = key
 	}
 }
 
@@ -254,7 +263,7 @@ const (
 )
 
 func newEnvironment(genv *Genv) (environment, error) {
-	envStr, err := genv.New("ENV").
+	envStr, err := genv.New(genv.environmentKey).
 		Fallback("DEVELOPMENT", OverrideAllow(func() bool { return true })).
 		TryString()
 	if err != nil {
