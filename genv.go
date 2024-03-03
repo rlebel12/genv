@@ -136,7 +136,7 @@ func (ev *envVar) String() string {
 
 func (ev *envVar) TryString() (string, error) {
 	if err := ev.validate(); err != nil {
-		return "", fmt.Errorf("invalid string environment variable for %s: %s: %w", ev.key, ev.value, err)
+		return "", fmt.Errorf("invalid string environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 	}
 	return ev.value, nil
 }
@@ -158,7 +158,7 @@ func (ev *envVar) TryBool() (bool, error) {
 	}
 	ret, err := strconv.ParseBool(ev.value)
 	if err != nil {
-		return false, fmt.Errorf("invalid boolean environment variable for %s: %s: %w", ev.key, ev.value, err)
+		return false, fmt.Errorf("invalid boolean environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 	}
 	return ret, nil
 }
@@ -173,14 +173,14 @@ func (ev *envVar) Int() int {
 
 func (ev *envVar) TryInt() (int, error) {
 	if err := ev.validate(); err != nil {
-		return 0, fmt.Errorf("invalid integer environment variable for %s: %s: %w", ev.key, ev.value, err)
+		return 0, fmt.Errorf("invalid integer environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 	}
 	if ev.value == "" {
 		return 0, nil
 	}
 	ret, err := strconv.Atoi(ev.value)
 	if err != nil {
-		return 0, fmt.Errorf("invalid integer environment variable for %s: %s: %w", ev.key, ev.value, err)
+		return 0, fmt.Errorf("invalid integer environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 	}
 	return ret, nil
 }
@@ -195,14 +195,14 @@ func (ev *envVar) Float64() float64 {
 
 func (ev *envVar) TryFloat64() (float64, error) {
 	if err := ev.validate(); err != nil {
-		return 0, fmt.Errorf("invalid float environment variable for %s: %s: %w", ev.key, ev.value, err)
+		return 0, fmt.Errorf("invalid float environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 	}
 	if ev.value == "" {
 		return 0, nil
 	}
 	ret, err := strconv.ParseFloat(ev.value, 64)
 	if err != nil {
-		return 0, fmt.Errorf("invalid float environment variable for %s: %s: %w", ev.key, ev.value, err)
+		return 0, fmt.Errorf("invalid float environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 	}
 	return ret, nil
 }
@@ -225,14 +225,14 @@ func (ev *envVar) URL() *url.URL {
 // url.Parse for more information.
 func (ev *envVar) TryURL() (*url.URL, error) {
 	if err := ev.validate(); err != nil {
-		return &url.URL{}, fmt.Errorf("invalid URL environment variable for %s: %s: %w", ev.key, ev.value, err)
+		return &url.URL{}, fmt.Errorf("invalid URL environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 	}
 	if ev.value == "" {
 		return &url.URL{}, nil
 	}
 	ret, err := url.Parse(ev.value)
 	if err != nil {
-		return &url.URL{}, fmt.Errorf("invalid URL environment variable for %s: %s: %w", ev.key, ev.value, err)
+		return &url.URL{}, fmt.Errorf("invalid URL environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 	}
 	return ret, nil
 }
