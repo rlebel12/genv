@@ -25,6 +25,7 @@ type Example struct {
 	AlwaysFallbackStringVar string
 	OptionalFloatVar        float64
 	AdvancedURLVar          *url.URL
+	ManyIntVar              []int
 }
 
 func NewExample() (example *Example, err error) {
@@ -58,6 +59,11 @@ func NewExample() (example *Example, err error) {
 			).
 			Optional().
 			URL(),
+		ManyIntVar: genv.
+			New("MANY_INT_VAR").
+			Optional().
+			Fallback("123,456,", goenvvars.AllowAlways()).
+			ManyInt(),
 	}
 	return
 }
