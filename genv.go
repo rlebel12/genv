@@ -15,7 +15,7 @@ type Genv struct {
 	defaultSplitKey      string
 }
 
-func NewGenv(opts ...genvOpt) (*Genv, error) {
+func New(opts ...genvOpt) (*Genv, error) {
 	genv := new(Genv)
 	genv.environmentKey = "ENV"
 	genv.defaultAllowFallback = func() bool { return !genv.IsProd() }
@@ -56,6 +56,11 @@ func (genv *Genv) New(key string, opts ...envVarOpt) *envVar {
 
 // Returns a new environment variable with the given key. Alias for New.
 func (genv *Genv) Env(key string, opts ...envVarOpt) *envVar {
+	return genv.New(key, opts...)
+}
+
+// Returns a new environment variable with the given key. Alias for New.
+func (genv *Genv) Get(key string, opts ...envVarOpt) *envVar {
 	return genv.New(key, opts...)
 }
 

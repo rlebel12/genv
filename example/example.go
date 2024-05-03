@@ -35,7 +35,7 @@ func NewExample() (example *Example, err error) {
 		}
 	}()
 
-	genv, err := goenvvars.NewGenv(goenvvars.DefaultAllowFallback(func() bool {
+	genv, err := goenvvars.New(goenvvars.DefaultAllowFallback(func() bool {
 		return false
 	}))
 	if err != nil {

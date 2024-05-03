@@ -9,7 +9,7 @@ import (
 
 func TestNewGenv(t *testing.T) {
 	t.Run("Valid", func(t *testing.T) {
-		genv, err := NewGenv()
+		genv, err := New()
 		assert.NoError(t, err)
 		assert.NotNil(t, genv)
 		assert.True(t, genv.defaultAllowFallback())
@@ -18,13 +18,13 @@ func TestNewGenv(t *testing.T) {
 
 	t.Run("InvalidEnvironment", func(t *testing.T) {
 		t.Setenv("ENV", "INVALID")
-		_, err := NewGenv()
+		_, err := New()
 		assert.Error(t, err)
 	})
 }
 
 func TestWithDefaultSplitKey(t *testing.T) {
-	genv, _ := NewGenv(WithDefaultSplitKey(";"))
+	genv, _ := New(WithDefaultSplitKey(";"))
 	assert.Equal(t, ";", genv.defaultSplitKey)
 }
 
@@ -34,6 +34,7 @@ func TestConstructor(t *testing.T) {
 	}{
 		"New": {(*Genv).New},
 		"Env": {(*Genv).Env},
+		"Get": {(*Genv).Get},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fn := test.fn
@@ -52,7 +53,7 @@ func TestConstructor(t *testing.T) {
 					if test.value != "" {
 						t.Setenv(key, test.value)
 					}
-					genv, _ := NewGenv()
+					genv, _ := New()
 					actual := fn(genv, key, test.opts...)
 					expected := &envVar{
 						key:      key,
@@ -70,7 +71,7 @@ func TestConstructor(t *testing.T) {
 }
 
 func TestEnvironmentKey(t *testing.T) {
-	genv, _ := NewGenv(EnvironmentKey("CUSTOM_ENV"))
+	genv, _ := New(EnvironmentKey("CUSTOM_ENV"))
 	assert.Equal(t, "CUSTOM_ENV", genv.environmentKey)
 }
 
@@ -84,7 +85,7 @@ func TestIsDev(t *testing.T) {
 		"Test": {Test, false},
 	} {
 		t.Run(name, func(t *testing.T) {
-			genv, err := NewGenv()
+			genv, err := New()
 			genv.environment = test.env
 			assert.NoError(t, err)
 			assert.Equal(t, test.expected, genv.IsDev())
@@ -102,7 +103,7 @@ func TestIsProd(t *testing.T) {
 		"Test": {Test, false},
 	} {
 		t.Run(name, func(t *testing.T) {
-			genv, err := NewGenv()
+			genv, err := New()
 			genv.environment = test.env
 			assert.NoError(t, err)
 			assert.Equal(t, test.expected, genv.IsProd())
@@ -120,7 +121,7 @@ func TestIsTest(t *testing.T) {
 		"Test": {Test, true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			genv, err := NewGenv()
+			genv, err := New()
 			genv.environment = test.env
 			assert.NoError(t, err)
 			assert.Equal(t, test.expected, genv.IsTest())
@@ -132,14 +133,14 @@ func TestValidate(t *testing.T) {
 	t.Run("Required", func(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
-			genv, _ := NewGenv()
+			genv, _ := New()
 			ev := genv.New("TEST_VAR")
 			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
-			genv, _ := NewGenv()
+			genv, _ := New()
 			ev := genv.New("TEST_VAR")
 			assert.Error(t, ev.validate())
 		})
@@ -148,14 +149,14 @@ func TestValidate(t *testing.T) {
 	t.Run("Optional", func(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
-			genv, _ := NewGenv()
+			genv, _ := New()
 			ev := genv.New("TEST_VAR").Optional()
 			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
-			genv, _ := NewGenv()
+			genv, _ := New()
 			ev := genv.New("TEST_VAR").Optional()
 			assert.Nil(t, ev.validate())
 		})
@@ -164,20 +165,20 @@ func TestValidate(t *testing.T) {
 
 func TestOptional(t *testing.T) {
 	t.Run("Required", func(t *testing.T) {
-		genv, _ := NewGenv()
+		genv, _ := New()
 		ev := genv.New("TEST_VAR")
 		assert.Equal(t, false, ev.optional)
 	})
 
 	t.Run("Optional", func(t *testing.T) {
-		genv, _ := NewGenv()
+		genv, _ := New()
 		ev := genv.New("TEST_VAR").Optional()
 		assert.Equal(t, true, ev.optional)
 	})
 }
 
 func TestWithSplitKey(t *testing.T) {
-	genv, _ := NewGenv(WithDefaultSplitKey(","))
+	genv, _ := New(WithDefaultSplitKey(","))
 	actual := genv.New("TEST_VAR").Default("123;456").ManyInt(WithSplitKey(";"))
 	assert.Equal(t, []int{123, 456}, actual)
 }
@@ -214,7 +215,7 @@ func TestFallingBack(t *testing.T) {
 				"NotFoundDisallowed": {false, []fallbackOpt{disallow}, ""},
 			} {
 				t.Run(name, func(t *testing.T) {
-					genv, err := NewGenv(DefaultAllowFallback(func() bool { return true }))
+					genv, err := New(DefaultAllowFallback(func() bool { return true }))
 					assert.NoError(t, err)
 
 					if test.found {
@@ -247,7 +248,7 @@ func TestFallingBack(t *testing.T) {
 				if test.found {
 					t.Setenv("TEST_VAR", "val")
 				}
-				genv, _ := NewGenv()
+				genv, _ := New()
 				actual := fn(genv.New("TEST_VAR"), "fallback", AllowAlways()).value
 				assert.Equal(t, test.expectedValue, actual)
 			})
@@ -684,7 +685,7 @@ func TestManyEvarURL(t *testing.T) {
 }
 
 func TestEnvironment(t *testing.T) {
-	genv, err := NewGenv(DefaultAllowFallback(func() bool { return false }))
+	genv, err := New(DefaultAllowFallback(func() bool { return false }))
 	assert.NoError(t, err)
 
 	t.Run("Specified", func(t *testing.T) {
