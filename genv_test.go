@@ -12,8 +12,8 @@ func TestNewGenv(t *testing.T) {
 		genv, err := New()
 		assert.NoError(t, err)
 		assert.NotNil(t, genv)
-		assert.True(t, genv.defaultAllowFallback(genv))
-		assert.Equal(t, ",", genv.defaultSplitKey)
+		assert.True(t, genv.allowDefault(genv))
+		assert.Equal(t, ",", genv.splitKey)
 	})
 
 	t.Run("InvalidEnvironment", func(t *testing.T) {
@@ -24,8 +24,8 @@ func TestNewGenv(t *testing.T) {
 }
 
 func TestWithDefaultSplitKey(t *testing.T) {
-	genv, _ := New(WithDefaultSplitKey(";"))
-	assert.Equal(t, ";", genv.defaultSplitKey)
+	genv, _ := New(WithSplitKey(";"))
+	assert.Equal(t, ";", genv.splitKey)
 }
 
 func TestConstructor(t *testing.T) {
@@ -63,7 +63,7 @@ func TestConstructor(t *testing.T) {
 						genv:     genv,
 					}
 					// We cannot test function equality
-					expected.allowFallback, actual.allowFallback = nil, nil
+					expected.allowDefault, actual.allowDefault = nil, nil
 					assert.Equal(t, *expected, *actual)
 				})
 			}
@@ -179,85 +179,58 @@ func TestOptional(t *testing.T) {
 }
 
 func TestWithSplitKey(t *testing.T) {
-	genv, _ := New(WithDefaultSplitKey(","))
-	actual := genv.New("TEST_VAR").Default("123;456").ManyInt(WithSplitKey(";"))
+	genv, _ := New(WithSplitKey(","))
+	actual := genv.New("TEST_VAR").Default("123;456").ManyInt(genv.WithSplitKey(";"))
 	assert.Equal(t, []int{123, 456}, actual)
 }
 
-type MockFallbackOpt struct {
+type MockDefaultOpt struct {
 	mock.Mock
 }
 
-func (m *MockFallbackOpt) optFunc() {
+func (m *MockDefaultOpt) optFunc() {
 	_ = m.Called()
 }
 
-func TestFallingBack(t *testing.T) {
+func TestDefault(t *testing.T) {
+	allow := func(*Genv) bool { return true }
+	disallow := func(*Genv) bool { return false }
 	for name, test := range map[string]struct {
-		fn func(ev *envVar, value string, opts ...fallbackOpt) *envVar
+		found         bool
+		opts          []func(*Genv) bool
+		expectedValue string
 	}{
-		"Fallback": {(*envVar).Fallback},
-		"Default":  {(*envVar).Default},
+		"Found":              {true, nil, "val"},
+		"FoundAllowed":       {true, []func(*Genv) bool{allow}, "val"},
+		"FoundDisallowed":    {true, []func(*Genv) bool{disallow}, "val"},
+		"NotFound":           {false, nil, "default"},
+		"NotFoundAllowed":    {false, []func(*Genv) bool{allow}, "default"},
+		"NotFoundDisallowed": {false, []func(*Genv) bool{disallow}, ""},
 	} {
-		fn := test.fn
 		t.Run(name, func(t *testing.T) {
-			allow := func(*Genv) bool { return true }
-			disallow := func(*Genv) bool { return false }
-			for name, test := range map[string]struct {
-				found         bool
-				opts          []func(*Genv) bool
-				expectedValue string
-			}{
-				"Found":              {true, nil, "val"},
-				"FoundAllowed":       {true, []func(*Genv) bool{allow}, "val"},
-				"FoundDisallowed":    {true, []func(*Genv) bool{disallow}, "val"},
-				"NotFound":           {false, nil, "fallback"},
-				"NotFoundAllowed":    {false, []func(*Genv) bool{allow}, "fallback"},
-				"NotFoundDisallowed": {false, []func(*Genv) bool{disallow}, ""},
-			} {
-				t.Run(name, func(t *testing.T) {
-					genv, err := New(DefaultAllowFallback(func(*Genv) bool { return true }))
-					assert.NoError(t, err)
+			genv, err := New(WithDefaultAllowDefault(func(*Genv) bool { return true }))
+			assert.NoError(t, err)
 
-					if test.found {
-						t.Setenv("TEST_VAR", "val")
-					}
-
-					customOpt := new(MockFallbackOpt)
-					customOpt.On("optFunc")
-					opts := []fallbackOpt{func(fb *fallback) { customOpt.optFunc() }}
-					fallbackOpts := make([]fallbackOpt, len(test.opts))
-					for i, opt := range test.opts {
-						fallbackOpts[i] = genv.OverrideAllow(opt)
-					}
-					opts = append(opts, fallbackOpts...)
-					actual := fn(
-						genv.New("TEST_VAR"),
-						"fallback",
-						opts...,
-					)
-					assert.Equal(t, test.expectedValue, actual.value)
-					customOpt.AssertExpectations(t)
-				})
+			if test.found {
+				t.Setenv("TEST_VAR", "val")
 			}
-		})
 
-		for name, test := range map[string]struct {
-			found         bool
-			expectedValue string
-		}{
-			"Found":    {true, "val"},
-			"NotFound": {false, "fallback"},
-		} {
-			t.Run(name, func(t *testing.T) {
-				if test.found {
-					t.Setenv("TEST_VAR", "val")
-				}
-				genv, _ := New()
-				actual := fn(genv.New("TEST_VAR"), "fallback", genv.AllowAlways()).value
-				assert.Equal(t, test.expectedValue, actual)
-			})
-		}
+			customOpt := new(MockDefaultOpt)
+			customOpt.On("optFunc")
+			opts := []defaultOpt{func(fb *fallback) { customOpt.optFunc() }}
+			fallbackOpts := make([]defaultOpt, len(test.opts))
+			for i, opt := range test.opts {
+				fallbackOpts[i] = genv.WithAllowDefault(opt)
+			}
+			opts = append(opts, fallbackOpts...)
+			actual := (*envVar).Default(
+				genv.New("TEST_VAR"),
+				"default",
+				opts...,
+			)
+			assert.Equal(t, test.expectedValue, actual.value)
+			customOpt.AssertExpectations(t)
+		})
 	}
 }
 
@@ -690,7 +663,7 @@ func TestManyEvarURL(t *testing.T) {
 }
 
 func TestEnvironment(t *testing.T) {
-	genv, err := New(DefaultAllowFallback(func(*Genv) bool { return false }))
+	genv, err := New(WithDefaultAllowDefault(func(*Genv) bool { return false }))
 	assert.NoError(t, err)
 
 	t.Run("Specified", func(t *testing.T) {

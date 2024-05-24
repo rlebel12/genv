@@ -40,33 +40,33 @@ By default, the package will fail if an environment variable is absent (either b
 var OptionalVar = genv.New("OPTIONAL_VAR").Optional()
 ```
 
-### Fallbacks
-You can specify a fallback value to use if the environment variable is absent:
+### Defaults
+You can specify a default value to use if the environment variable is absent:
 
 ```go
-var FallbackVar = genv.New("FALLBACK_VAR").Fallback("fallback value")
+var DefaultVar = genv.New("DEFAULT_VAR").Default("default value")
 ```
 
-This is intended to be used to allow speed and ease of development while ensuring that all environment variables are defined before deploying to production. Thus, the default behavior is to forbid fallbacks when the `ENV` environment variable is set to `PRODUCTION` or `PROD`. This behavior can be overridden in two ways.
+This is intended to be used to allow speed and ease of development while ensuring that all environment variables are defined before deploying to production. Thus, the default behavior is to forbid defaults when the `ENV` environment variable is set to `PRODUCTION` or `PROD`. This behavior can be overridden in two ways.
 
-#### Allow Fallbacks: Global Override
+#### Allow Defaults: Global Override
 
 Override the behavior for all subsequent invocations of `goenvvars.New`:
 
 ```go
-var genv, _ := goenvvars.NewGenv(
-    goenvvars.DefaultAllowFallback(func() bool { return true }),
+var genv, _ := goenvvars.New(
+    goenvvars.DefaultAllowDefault(func() bool { return true }),
 )
 ```
 
-#### Allow Fallbacks: Individual Override
+#### Allow Defaults: Individual Override
 
-Override the behavior for individual environment variables by passing an `OverrideAllow` option to `Fallback`:
+Override the behavior for individual environment variables by passing an `WithAllowDefault` option to `Default`:
     
 ```go
-var FallbackVar = genv.New("FALLBACK_VAR").Fallback(
-    "fallback value",
-    goenvvars.OverrideAllow(func() bool { return true }),
+var DefaultVar = genv.New("DEFAULT_VAR").Default(
+    "default value",
+    goenvvars.WithAllowDefault(func() bool { return true }),
 )
 ```
 
@@ -74,12 +74,12 @@ This approach takes priority over the global override.
 
 ### Combining Options
 Options can be chained together. For example, it is possible to declare that an environment variable is both
-optional and has a fallback value. This means that the fallback value will be used if allowed and necessary, and the program
+optional and has a default value. This means that the default value will be used if allowed and necessary, and the program
 will not panic if the final value is still absent.
 
 ```go
-var OptionalFallbackVar = genv.New("OPTIONAL_FALLBACK_VAR").
-    Fallback("fallback value").
+var OptionalDefaultVar = genv.New("OPTIONAL_DEFAULT_VAR").
+    Default("default value").
     Optional()
 ```
 

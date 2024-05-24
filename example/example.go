@@ -19,13 +19,13 @@ func main() {
 }
 
 type Example struct {
-	StringVar               string
-	IntVar                  int
-	BoolVar                 bool
-	AlwaysFallbackStringVar string
-	OptionalFloatVar        float64
-	AdvancedURLVar          *url.URL
-	ManyIntVar              []int
+	StringVar              string
+	IntVar                 int
+	BoolVar                bool
+	AlwaysDefaultStringVar string
+	OptionalFloatVar       float64
+	AdvancedURLVar         *url.URL
+	ManyIntVar             []int
 }
 
 func NewExample() (example *Example, err error) {
@@ -35,7 +35,7 @@ func NewExample() (example *Example, err error) {
 		}
 	}()
 
-	genv, err := goenvvars.New(goenvvars.DefaultAllowFallback(func(*goenvvars.Genv) bool {
+	genv, err := goenvvars.New(goenvvars.WithDefaultAllowDefault(func(*goenvvars.Genv) bool {
 		return false
 	}))
 	if err != nil {
@@ -46,15 +46,15 @@ func NewExample() (example *Example, err error) {
 		StringVar: genv.New("STRING_VAR").String(), // Required
 		IntVar:    genv.New("INT_VAR").Int(),       // Required
 		BoolVar:   genv.New("BOOL_VAR").Bool(),     // Required
-		AlwaysFallbackStringVar: genv.New("ALWAYS_FALLBACK_STRING_VAR").
-			Fallback("fallback value", genv.AllowAlways()).
+		AlwaysDefaultStringVar: genv.New("ALWAYS_DEFAULT_STRING_VAR").
+			Default("default value", genv.WithAllowDefaultAlways()).
 			String(),
 		OptionalFloatVar: genv.New("OPTIONAL_FLOAT_VAR").Optional().Float64(),
 		AdvancedURLVar: genv.New("ADVANCED_URL_VAR").
-			Fallback(
+			Default(
 				"https://example.com",
-				genv.OverrideAllow(func(*goenvvars.Genv) bool {
-					return rand.Float32() < 0.5 // 50% chance to use the fallback
+				genv.WithAllowDefault(func(*goenvvars.Genv) bool {
+					return rand.Float32() < 0.5 // 50% chance to use the default
 				}),
 			).
 			Optional().
@@ -62,7 +62,7 @@ func NewExample() (example *Example, err error) {
 		ManyIntVar: genv.
 			New("MANY_INT_VAR").
 			Optional().
-			Fallback("123,456,", genv.AllowAlways()).
+			Default("123,456,", genv.WithAllowDefaultAlways()).
 			ManyInt(),
 	}
 	return
