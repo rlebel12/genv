@@ -208,7 +208,7 @@ func TestDefault(t *testing.T) {
 		"NotFoundDisallowed": {false, []func(*Genv) bool{disallow}, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			genv, err := New(WithDefaultAllowDefault(func(*Genv) bool { return true }))
+			genv, err := New(WithAllowDefault(func(*Genv) bool { return true }))
 			assert.NoError(t, err)
 
 			if test.found {
@@ -663,7 +663,7 @@ func TestManyEvarURL(t *testing.T) {
 }
 
 func TestEnvironment(t *testing.T) {
-	genv, err := New(WithDefaultAllowDefault(func(*Genv) bool { return false }))
+	genv, err := New(WithAllowDefault(func(*Genv) bool { return false }))
 	assert.NoError(t, err)
 
 	t.Run("Specified", func(t *testing.T) {

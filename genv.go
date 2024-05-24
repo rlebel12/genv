@@ -41,7 +41,7 @@ func WithSplitKey(splitKey string) genvOpt {
 	}
 }
 
-func WithDefaultAllowDefault(allowFn func(*Genv) bool) genvOpt {
+func WithAllowDefault(allowFn func(*Genv) bool) genvOpt {
 	return func(genv *Genv) {
 		genv.allowDefault = allowFn
 	}
