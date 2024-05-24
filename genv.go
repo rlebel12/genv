@@ -10,24 +10,20 @@ import (
 
 type (
 	Genv struct {
-		allowDefault   func(*Genv) bool
-		environment    environment
-		environmentKey string
-		splitKey       string
+		allowDefault func(*Genv) bool
+		splitKey     string
 	}
 )
 
 func New(opts ...genvOpt) (*Genv, error) {
 	genv := new(Genv)
-	genv.environmentKey = "ENV"
-	genv.allowDefault = func(genv *Genv) bool { return !genv.IsProd() }
-	genv.splitKey = ","
-
-	environment, err := newEnvironment(genv)
-	if err != nil {
-		return nil, fmt.Errorf("invalid environment: %w", err)
+	genv.allowDefault = func(genv *Genv) bool {
+		return genv.
+			New("GENV_ALLOW_DEFAULT").
+			Default("false", genv.WithAllowDefaultAlways()).
+			Bool()
 	}
-	genv.environment = environment
+	genv.splitKey = ","
 
 	for _, opt := range opts {
 		opt(genv)
@@ -73,21 +69,9 @@ func (genv *Genv) Get(key string, opts ...envVarOpt) *envVar {
 	return genv.New(key, opts...)
 }
 
-func (genv *Genv) IsDev() bool {
-	return genv.environment == Dev
-}
-
-func (genv *Genv) IsProd() bool {
-	return genv.environment == Prod
-}
-
-func (genv *Genv) IsTest() bool {
-	return genv.environment == Test
-}
-
 func (genv *Genv) WithAllowDefault(allow func(genv *Genv) bool) defaultOpt {
 	return func(f *fallback) {
-		f.allow = allow(genv)
+		f.allow = allow
 	}
 }
 
@@ -108,7 +92,7 @@ type envVar struct {
 }
 
 type fallback struct {
-	allow bool
+	allow func(*Genv) bool
 }
 
 type defaultOpt func(*fallback)
@@ -121,15 +105,13 @@ func (ev *envVar) Optional() *envVar {
 // Sets the default value for the environment variable if not present
 func (ev *envVar) Default(value string, opts ...defaultOpt) *envVar {
 	fb := new(fallback)
-	if ev.allowDefault != nil {
-		fb.allow = ev.allowDefault(ev.genv)
-	}
+	fb.allow = ev.allowDefault
 
 	for _, opt := range opts {
 		opt(fb)
 	}
 
-	if !ev.found && fb.allow {
+	if !ev.found && fb.allow != nil && fb.allow(ev.genv) {
 		ev.value = value
 	}
 	return ev
@@ -364,41 +346,3 @@ func (ev *envVar) validate() error {
 }
 
 type genvOpt func(*Genv)
-
-type environment uint8
-
-const (
-	Dev environment = iota
-	Prod
-	Test
-)
-
-func newEnvironment(genv *Genv) (environment, error) {
-	envStr, err := genv.New(genv.environmentKey).
-		Default("DEVELOPMENT", genv.WithAllowDefault(func(*Genv) bool { return true })).
-		TryString()
-	if err != nil {
-		return 0, fmt.Errorf("invalid environment - must be a string: %w", err)
-	}
-	env, ok := environments()[envStr]
-	if !ok {
-		return 0, fmt.Errorf("invalid environment value: %w", err)
-	}
-	return env, nil
-}
-
-func environments() map[string]environment {
-	return map[string]environment{
-		"DEVELOPMENT": Dev,
-		"DEV":         Dev,
-		"PRODUCTION":  Prod,
-		"PROD":        Prod,
-		"TEST":        Test,
-	}
-}
-
-func EnvironmentKey(key string) genvOpt {
-	return func(genv *Genv) {
-		genv.environmentKey = key
-	}
-}

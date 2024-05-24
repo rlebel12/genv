@@ -47,11 +47,11 @@ You can specify a default value to use if the environment variable is absent:
 var DefaultVar = genv.New("DEFAULT_VAR").Default("default value")
 ```
 
-This is intended to be used to allow speed and ease of development while ensuring that all environment variables are defined before deploying to production. Thus, the default behavior is to forbid defaults when the `ENV` environment variable is set to `PRODUCTION` or `PROD`. This behavior can be overridden in two ways.
+This is intended to be used to allow speed and ease of development while ensuring that all environment variables are defined before deploying to production. Thus, the default behavior is to forbid defaults unless the `GENV_ALLOW_DEFAULT` environment variable evaluates to `true`. This behavior can be overridden in two ways.
 
 #### Allow Defaults: Global Override
 
-Override the behavior for all subsequent invocations of `goenvvars.New`:
+Override the behavior for all subsequent invocations of `genv.New`:
 
 ```go
 var genv, _ := goenvvars.New(

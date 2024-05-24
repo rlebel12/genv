@@ -8,24 +8,21 @@ import (
 )
 
 func TestNewGenv(t *testing.T) {
-	t.Run("Valid", func(t *testing.T) {
-		genv, err := New()
-		assert.NoError(t, err)
-		assert.NotNil(t, genv)
-		assert.True(t, genv.allowDefault(genv))
-		assert.Equal(t, ",", genv.splitKey)
-	})
-
-	t.Run("InvalidEnvironment", func(t *testing.T) {
-		t.Setenv("ENV", "INVALID")
-		_, err := New()
-		assert.Error(t, err)
-	})
+	genv, err := New()
+	assert.NoError(t, err)
+	assert.NotNil(t, genv)
+	assert.False(t, genv.allowDefault(genv))
+	assert.Equal(t, ",", genv.splitKey)
 }
 
 func TestWithDefaultSplitKey(t *testing.T) {
 	genv, _ := New(WithSplitKey(";"))
 	assert.Equal(t, ";", genv.splitKey)
+}
+
+func TestWithAllowDefault(t *testing.T) {
+	genv, _ := New(WithAllowDefault(func(*Genv) bool { return true }))
+	assert.True(t, genv.allowDefault(genv))
 }
 
 func TestConstructor(t *testing.T) {
@@ -67,65 +64,6 @@ func TestConstructor(t *testing.T) {
 					assert.Equal(t, *expected, *actual)
 				})
 			}
-		})
-	}
-}
-
-func TestEnvironmentKey(t *testing.T) {
-	genv, _ := New(EnvironmentKey("CUSTOM_ENV"))
-	assert.Equal(t, "CUSTOM_ENV", genv.environmentKey)
-}
-
-func TestIsDev(t *testing.T) {
-	for name, test := range map[string]struct {
-		env      environment
-		expected bool
-	}{
-		"Dev":  {Dev, true},
-		"Prod": {Prod, false},
-		"Test": {Test, false},
-	} {
-		t.Run(name, func(t *testing.T) {
-			genv, err := New()
-			genv.environment = test.env
-			assert.NoError(t, err)
-			assert.Equal(t, test.expected, genv.IsDev())
-		})
-	}
-}
-
-func TestIsProd(t *testing.T) {
-	for name, test := range map[string]struct {
-		env      environment
-		expected bool
-	}{
-		"Dev":  {Dev, false},
-		"Prod": {Prod, true},
-		"Test": {Test, false},
-	} {
-		t.Run(name, func(t *testing.T) {
-			genv, err := New()
-			genv.environment = test.env
-			assert.NoError(t, err)
-			assert.Equal(t, test.expected, genv.IsProd())
-		})
-	}
-}
-
-func TestIsTest(t *testing.T) {
-	for name, test := range map[string]struct {
-		env      environment
-		expected bool
-	}{
-		"Dev":  {Dev, false},
-		"Prod": {Prod, false},
-		"Test": {Test, true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			genv, err := New()
-			genv.environment = test.env
-			assert.NoError(t, err)
-			assert.Equal(t, test.expected, genv.IsTest())
 		})
 	}
 }
@@ -180,7 +118,9 @@ func TestOptional(t *testing.T) {
 
 func TestWithSplitKey(t *testing.T) {
 	genv, _ := New(WithSplitKey(","))
-	actual := genv.New("TEST_VAR").Default("123;456").ManyInt(genv.WithSplitKey(";"))
+	actual := genv.New("TEST_VAR").
+		Default("123;456", genv.WithAllowDefaultAlways()).
+		ManyInt(genv.WithSplitKey(";"))
 	assert.Equal(t, []int{123, 456}, actual)
 }
 
@@ -659,42 +599,5 @@ func TestManyEvarURL(t *testing.T) {
 	t.Run(("Empty"), func(t *testing.T) {
 		ev := &envVar{key: "TEST_VAR", value: "", optional: true}
 		assert.Empty(t, ev.ManyURL())
-	})
-}
-
-func TestEnvironment(t *testing.T) {
-	genv, err := New(WithAllowDefault(func(*Genv) bool { return false }))
-	assert.NoError(t, err)
-
-	t.Run("Specified", func(t *testing.T) {
-		envs := environments()
-		assert.NotEmpty(t, envs)
-		for value, expected := range envs {
-			t.Run(value, func(t *testing.T) {
-				t.Setenv("ENV", value)
-				env, err := newEnvironment(genv)
-				assert.NoError(t, err)
-				assert.Equal(t, expected, env)
-			})
-		}
-
-		for name, test := range map[string]struct {
-			envValue string
-		}{
-			"NotString": {"5"},
-			"Invalid":   {"INVALID"},
-		} {
-			t.Run(name, func(t *testing.T) {
-				t.Setenv("ENV", test.envValue)
-				_, err := newEnvironment(genv)
-				assert.Error(t, err)
-			})
-		}
-	})
-
-	t.Run("Unspecified", func(t *testing.T) {
-		env, err := newEnvironment(genv)
-		assert.NoError(t, err)
-		assert.Equal(t, Dev, env)
 	})
 }
