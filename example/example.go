@@ -35,7 +35,7 @@ func NewExample() (example *Example, err error) {
 		}
 	}()
 
-	genv, err := goenvvars.New(goenvvars.DefaultAllowFallback(func() bool {
+	genv, err := goenvvars.New(goenvvars.DefaultAllowFallback(func(*goenvvars.Genv) bool {
 		return false
 	}))
 	if err != nil {
@@ -47,13 +47,13 @@ func NewExample() (example *Example, err error) {
 		IntVar:    genv.New("INT_VAR").Int(),       // Required
 		BoolVar:   genv.New("BOOL_VAR").Bool(),     // Required
 		AlwaysFallbackStringVar: genv.New("ALWAYS_FALLBACK_STRING_VAR").
-			Fallback("fallback value", goenvvars.AllowAlways()).
+			Fallback("fallback value", genv.AllowAlways()).
 			String(),
 		OptionalFloatVar: genv.New("OPTIONAL_FLOAT_VAR").Optional().Float64(),
 		AdvancedURLVar: genv.New("ADVANCED_URL_VAR").
 			Fallback(
 				"https://example.com",
-				goenvvars.OverrideAllow(func() bool {
+				genv.OverrideAllow(func(*goenvvars.Genv) bool {
 					return rand.Float32() < 0.5 // 50% chance to use the fallback
 				}),
 			).
@@ -62,7 +62,7 @@ func NewExample() (example *Example, err error) {
 		ManyIntVar: genv.
 			New("MANY_INT_VAR").
 			Optional().
-			Fallback("123,456,", goenvvars.AllowAlways()).
+			Fallback("123,456,", genv.AllowAlways()).
 			ManyInt(),
 	}
 	return

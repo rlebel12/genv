@@ -8,17 +8,19 @@ import (
 	"strings"
 )
 
-type Genv struct {
-	defaultAllowFallback func() bool
-	environment          environment
-	environmentKey       string
-	defaultSplitKey      string
-}
+type (
+	Genv struct {
+		defaultAllowFallback func(*Genv) bool
+		environment          environment
+		environmentKey       string
+		defaultSplitKey      string
+	}
+)
 
 func New(opts ...genvOpt) (*Genv, error) {
 	genv := new(Genv)
 	genv.environmentKey = "ENV"
-	genv.defaultAllowFallback = func() bool { return !genv.IsProd() }
+	genv.defaultAllowFallback = func(*Genv) bool { return !genv.IsProd() }
 	genv.defaultSplitKey = ","
 
 	environment, err := newEnvironment(genv)
@@ -46,6 +48,7 @@ func (genv *Genv) New(key string, opts ...envVarOpt) *envVar {
 	ev.allowFallback = genv.defaultAllowFallback
 	ev.splitKey = genv.defaultSplitKey
 	ev.value, ev.found = os.LookupEnv(key)
+	ev.genv = genv
 
 	for _, opt := range opts {
 		opt(ev)
@@ -76,18 +79,26 @@ func (genv *Genv) IsTest() bool {
 	return genv.environment == Test
 }
 
+func (genv *Genv) OverrideAllow(allow func(genv *Genv) bool) fallbackOpt {
+	return func(f *fallback) {
+		f.allow = allow(genv)
+	}
+}
+
+func (genv *Genv) AllowAlways() fallbackOpt {
+	return genv.OverrideAllow(func(*Genv) bool {
+		return true
+	})
+}
+
 type envVar struct {
 	key           string
 	value         string
 	found         bool
 	optional      bool
-	allowFallback func() bool
+	allowFallback func(*Genv) bool
 	splitKey      string
-}
-
-func (ev *envVar) Optional() *envVar {
-	ev.optional = true
-	return ev
+	genv          *Genv
 }
 
 type fallback struct {
@@ -95,6 +106,11 @@ type fallback struct {
 }
 
 type fallbackOpt func(*fallback)
+
+func (ev *envVar) Optional() *envVar {
+	ev.optional = true
+	return ev
+}
 
 // Sets the default value for the environment variable if not present. Alias for Fallback.
 func (ev *envVar) Default(value string, opts ...fallbackOpt) *envVar {
@@ -105,7 +121,7 @@ func (ev *envVar) Default(value string, opts ...fallbackOpt) *envVar {
 func (ev *envVar) Fallback(value string, opts ...fallbackOpt) *envVar {
 	fb := new(fallback)
 	if ev.allowFallback != nil {
-		fb.allow = ev.allowFallback()
+		fb.allow = ev.allowFallback(ev.genv)
 	}
 
 	for _, opt := range opts {
@@ -124,18 +140,6 @@ func WithSplitKey(splitKey string) manyOpt {
 	return func(mev *envVar) {
 		mev.splitKey = splitKey
 	}
-}
-
-func OverrideAllow(allow func() bool) fallbackOpt {
-	return func(f *fallback) {
-		f.allow = allow()
-	}
-}
-
-func AllowAlways() fallbackOpt {
-	return OverrideAllow(func() bool {
-		return true
-	})
 }
 
 func (ev *envVar) String() string {
@@ -325,6 +329,7 @@ func parseMany[T any](ev *envVar, parser func(*envVar) (T, error), opts ...manyO
 			found:         ev.found,
 			optional:      ev.optional,
 			allowFallback: ev.allowFallback,
+			genv:          ev.genv,
 		})
 	}
 	if !ev.optional && len(vars) == 0 {
@@ -335,7 +340,7 @@ func parseMany[T any](ev *envVar, parser func(*envVar) (T, error), opts ...manyO
 	for i, ev := range vars {
 		val, err := parser(&ev)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 		}
 		result[i] = val
 	}
@@ -369,7 +374,7 @@ const (
 
 func newEnvironment(genv *Genv) (environment, error) {
 	envStr, err := genv.New(genv.environmentKey).
-		Fallback("DEVELOPMENT", OverrideAllow(func() bool { return true })).
+		Fallback("DEVELOPMENT", genv.OverrideAllow(func(*Genv) bool { return true })).
 		TryString()
 	if err != nil {
 		return 0, fmt.Errorf("invalid environment - must be a string: %w", err)
@@ -391,7 +396,7 @@ func environments() map[string]environment {
 	}
 }
 
-func DefaultAllowFallback(allow func() bool) genvOpt {
+func DefaultAllowFallback(allow func(*Genv) bool) genvOpt {
 	return func(genv *Genv) {
 		genv.defaultAllowFallback = allow
 	}
