@@ -5,8 +5,7 @@ ENV CGO_ENABLED=0
 ENV GOOS=linux
 
 COPY . .
-RUN go test ./...
-RUN go build -o /genv ./example
+RUN go build -o /genv ./foo
 
 
 FROM scratch as final
