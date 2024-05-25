@@ -15,7 +15,7 @@ type (
 	}
 )
 
-func New(opts ...genvOpt) (*Genv, error) {
+func New(opts ...genvOpt) *Genv {
 	genv := new(Genv)
 	genv.allowDefault = func(genv *Genv) bool {
 		return genv.
@@ -28,7 +28,7 @@ func New(opts ...genvOpt) (*Genv, error) {
 	for _, opt := range opts {
 		opt(genv)
 	}
-	return genv, nil
+	return genv
 }
 
 func WithSplitKey(splitKey string) genvOpt {

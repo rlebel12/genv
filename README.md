@@ -20,7 +20,7 @@ import "github.com/rlebel12/goenvvars/v3"
 In its most basic form, the package can be used to retrieve environment variables and then parse them into specified types:
 
 ```go
-var genv, _ := goenvvars.New()
+var genv := goenvvars.New()
 var StringVar = genv.Var("STRING_VAR").String()
 var BoolVar = genv.Var("BOOL_VAR").Bool()
 var IntVar = genv.Var("INT_VAR").Int()
@@ -54,7 +54,7 @@ This is intended to be used to allow speed and ease of development while ensurin
 Override the behavior for all subsequent invocations of `genv.Var`:
 
 ```go
-var genv, _ := goenvvars.New(
+var genv := goenvvars.New(
     goenvvars.WithAllowDefault(func() bool { return true }),
 )
 ```

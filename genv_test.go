@@ -8,20 +8,19 @@ import (
 )
 
 func TestNewGenv(t *testing.T) {
-	genv, err := New()
-	assert.NoError(t, err)
+	genv := New()
 	assert.NotNil(t, genv)
 	assert.False(t, genv.allowDefault(genv))
 	assert.Equal(t, ",", genv.splitKey)
 }
 
 func TestWithDefaultSplitKey(t *testing.T) {
-	genv, _ := New(WithSplitKey(";"))
+	genv := New(WithSplitKey(";"))
 	assert.Equal(t, ";", genv.splitKey)
 }
 
 func TestWithAllowDefault(t *testing.T) {
-	genv, _ := New(WithAllowDefault(func(*Genv) bool { return true }))
+	genv := New(WithAllowDefault(func(*Genv) bool { return true }))
 	assert.True(t, genv.allowDefault(genv))
 }
 
@@ -48,7 +47,7 @@ func TestConstructor(t *testing.T) {
 					if test.value != "" {
 						t.Setenv(key, test.value)
 					}
-					genv, _ := New()
+					genv := New()
 					actual := fn(genv, key, test.opts...)
 					expected := &envVar{
 						key:      key,
@@ -70,14 +69,14 @@ func TestValidate(t *testing.T) {
 	t.Run("Required", func(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
-			genv, _ := New()
+			genv := New()
 			ev := genv.Var("TEST_VAR")
 			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
-			genv, _ := New()
+			genv := New()
 			ev := genv.Var("TEST_VAR")
 			assert.Error(t, ev.validate())
 		})
@@ -86,14 +85,14 @@ func TestValidate(t *testing.T) {
 	t.Run("Optional", func(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
-			genv, _ := New()
+			genv := New()
 			ev := genv.Var("TEST_VAR").Optional()
 			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
-			genv, _ := New()
+			genv := New()
 			ev := genv.Var("TEST_VAR").Optional()
 			assert.Nil(t, ev.validate())
 		})
@@ -102,20 +101,20 @@ func TestValidate(t *testing.T) {
 
 func TestOptional(t *testing.T) {
 	t.Run("Required", func(t *testing.T) {
-		genv, _ := New()
+		genv := New()
 		ev := genv.Var("TEST_VAR")
 		assert.Equal(t, false, ev.optional)
 	})
 
 	t.Run("Optional", func(t *testing.T) {
-		genv, _ := New()
+		genv := New()
 		ev := genv.Var("TEST_VAR").Optional()
 		assert.Equal(t, true, ev.optional)
 	})
 }
 
 func TestWithSplitKey(t *testing.T) {
-	genv, _ := New(WithSplitKey(","))
+	genv := New(WithSplitKey(","))
 	actual := genv.Var("TEST_VAR").
 		Default("123;456", genv.WithAllowDefaultAlways()).
 		ManyInt(genv.WithSplitKey(";"))
@@ -146,8 +145,7 @@ func TestDefault(t *testing.T) {
 		"NotFoundDisallowed": {false, []func(*Genv) bool{disallow}, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			genv, err := New(WithAllowDefault(func(*Genv) bool { return true }))
-			assert.NoError(t, err)
+			genv := New(WithAllowDefault(func(*Genv) bool { return true }))
 
 			if test.found {
 				t.Setenv("TEST_VAR", "val")
