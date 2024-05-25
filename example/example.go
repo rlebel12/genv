@@ -35,7 +35,7 @@ func NewExample() (example *Example, err error) {
 		}
 	}()
 
-	genv, err := goenvvars.New(goenvvars.WithAllowDefault(func(*goenvvars.Genv) bool {
+	genv := goenvvars.New(goenvvars.WithAllowDefault(func(*goenvvars.Genv) bool {
 		return false
 	}))
 	if err != nil {
