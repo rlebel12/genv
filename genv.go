@@ -19,7 +19,7 @@ func New(opts ...genvOpt) (*Genv, error) {
 	genv := new(Genv)
 	genv.allowDefault = func(genv *Genv) bool {
 		return genv.
-			New("GENV_ALLOW_DEFAULT").
+			Var("GENV_ALLOW_DEFAULT").
 			Default("false", genv.WithAllowDefaultAlways()).
 			Bool()
 	}
@@ -44,7 +44,7 @@ func WithAllowDefault(allowFn func(*Genv) bool) genvOpt {
 }
 
 // Returns a new environment variable with the given key.
-func (genv *Genv) New(key string, opts ...envVarOpt) *envVar {
+func (genv *Genv) Var(key string, opts ...envVarOpt) *envVar {
 	ev := new(envVar)
 	ev.key = key
 	ev.allowDefault = genv.allowDefault
@@ -57,16 +57,6 @@ func (genv *Genv) New(key string, opts ...envVarOpt) *envVar {
 	}
 
 	return ev
-}
-
-// Returns a new environment variable with the given key. Alias for New.
-func (genv *Genv) Env(key string, opts ...envVarOpt) *envVar {
-	return genv.New(key, opts...)
-}
-
-// Returns a new environment variable with the given key. Alias for New.
-func (genv *Genv) Get(key string, opts ...envVarOpt) *envVar {
-	return genv.New(key, opts...)
 }
 
 func (genv *Genv) WithAllowDefault(allow func(genv *Genv) bool) defaultOpt {
