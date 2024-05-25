@@ -29,9 +29,7 @@ func TestConstructor(t *testing.T) {
 	for name, test := range map[string]struct {
 		fn func(ev *Genv, key string, opts ...envVarOpt) *envVar
 	}{
-		"New": {(*Genv).New},
-		"Env": {(*Genv).Env},
-		"Get": {(*Genv).Get},
+		"New": {(*Genv).Var},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fn := test.fn
@@ -73,14 +71,14 @@ func TestValidate(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
 			genv, _ := New()
-			ev := genv.New("TEST_VAR")
+			ev := genv.Var("TEST_VAR")
 			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
 			genv, _ := New()
-			ev := genv.New("TEST_VAR")
+			ev := genv.Var("TEST_VAR")
 			assert.Error(t, ev.validate())
 		})
 	})
@@ -89,14 +87,14 @@ func TestValidate(t *testing.T) {
 		t.Run("Present", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "val")
 			genv, _ := New()
-			ev := genv.New("TEST_VAR").Optional()
+			ev := genv.Var("TEST_VAR").Optional()
 			assert.Nil(t, ev.validate())
 		})
 
 		t.Run("Absent", func(t *testing.T) {
 			t.Setenv("TEST_VAR", "")
 			genv, _ := New()
-			ev := genv.New("TEST_VAR").Optional()
+			ev := genv.Var("TEST_VAR").Optional()
 			assert.Nil(t, ev.validate())
 		})
 	})
@@ -105,20 +103,20 @@ func TestValidate(t *testing.T) {
 func TestOptional(t *testing.T) {
 	t.Run("Required", func(t *testing.T) {
 		genv, _ := New()
-		ev := genv.New("TEST_VAR")
+		ev := genv.Var("TEST_VAR")
 		assert.Equal(t, false, ev.optional)
 	})
 
 	t.Run("Optional", func(t *testing.T) {
 		genv, _ := New()
-		ev := genv.New("TEST_VAR").Optional()
+		ev := genv.Var("TEST_VAR").Optional()
 		assert.Equal(t, true, ev.optional)
 	})
 }
 
 func TestWithSplitKey(t *testing.T) {
 	genv, _ := New(WithSplitKey(","))
-	actual := genv.New("TEST_VAR").
+	actual := genv.Var("TEST_VAR").
 		Default("123;456", genv.WithAllowDefaultAlways()).
 		ManyInt(genv.WithSplitKey(";"))
 	assert.Equal(t, []int{123, 456}, actual)
@@ -164,7 +162,7 @@ func TestDefault(t *testing.T) {
 			}
 			opts = append(opts, fallbackOpts...)
 			actual := (*envVar).Default(
-				genv.New("TEST_VAR"),
+				genv.Var("TEST_VAR"),
 				"default",
 				opts...,
 			)

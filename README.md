@@ -21,37 +21,37 @@ In its most basic form, the package can be used to retrieve environment variable
 
 ```go
 var genv, _ := goenvvars.New()
-var StringVar = genv.New("STRING_VAR").String()
-var BoolVar = genv.New("BOOL_VAR").Bool()
-var IntVar = genv.New("INT_VAR").Int()
-var FloatVar = genv.New("FLOAT_VAR").Float()
-var URLVar = genv.New("URL_VAR").URL()
+var StringVar = genv.Var("STRING_VAR").String()
+var BoolVar = genv.Var("BOOL_VAR").Bool()
+var IntVar = genv.Var("INT_VAR").Int()
+var FloatVar = genv.Var("FLOAT_VAR").Float()
+var URLVar = genv.Var("URL_VAR").URL()
 ```
 
 If the value from an environment variable cannot be parsed into the specified type, the function will panic. Alternatively, the `Try*` functions can be used to return an error instead of panicking.
 ```go
-myVar, err := genv.New("MY_VAR").TryString()
+myVar, err := genv.Var("MY_VAR").TryString()
 ```
 
 ### Optional Variables
 By default, the package will fail if an environment variable is absent (either because the environment variable is not defined, or because it was set to an empty string). However, it is possible to specify that a variable is optional to prevent the panic behavior:
 
 ```go
-var OptionalVar = genv.New("OPTIONAL_VAR").Optional()
+var OptionalVar = genv.Var("OPTIONAL_VAR").Optional()
 ```
 
 ### Defaults
 You can specify a default value to use if the environment variable is absent:
 
 ```go
-var DefaultVar = genv.New("DEFAULT_VAR").Default("default value")
+var DefaultVar = genv.Var("DEFAULT_VAR").Default("default value")
 ```
 
 This is intended to be used to allow speed and ease of development while ensuring that all environment variables are defined before deploying to production. Thus, the default behavior is to forbid defaults unless the `GENV_ALLOW_DEFAULT` environment variable evaluates to `true`. This behavior can be overridden in two ways.
 
 #### Allow Defaults: Global Override
 
-Override the behavior for all subsequent invocations of `genv.New`:
+Override the behavior for all subsequent invocations of `genv.Var`:
 
 ```go
 var genv, _ := goenvvars.New(
@@ -64,7 +64,7 @@ var genv, _ := goenvvars.New(
 Override the behavior for individual environment variables by passing an `WithAllowDefault` option to `Default`:
     
 ```go
-var DefaultVar = genv.New("DEFAULT_VAR").Default(
+var DefaultVar = genv.Var("DEFAULT_VAR").Default(
     "default value",
     genv.WithAllowDefault(func() bool { return true }),
 )
@@ -78,7 +78,7 @@ optional and has a default value. This means that the default value will be used
 will not panic if the final value is still absent.
 
 ```go
-var OptionalDefaultVar = genv.New("OPTIONAL_DEFAULT_VAR").
+var OptionalDefaultVar = genv.Var("OPTIONAL_DEFAULT_VAR").
     Default("default value").
     Optional()
 ```

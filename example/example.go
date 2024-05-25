@@ -43,14 +43,14 @@ func NewExample() (example *Example, err error) {
 	}
 
 	example = &Example{
-		StringVar: genv.New("STRING_VAR").String(), // Required
-		IntVar:    genv.New("INT_VAR").Int(),       // Required
-		BoolVar:   genv.New("BOOL_VAR").Bool(),     // Required
-		AlwaysDefaultStringVar: genv.New("ALWAYS_DEFAULT_STRING_VAR").
+		StringVar: genv.Var("STRING_VAR").String(), // Required
+		IntVar:    genv.Var("INT_VAR").Int(),       // Required
+		BoolVar:   genv.Var("BOOL_VAR").Bool(),     // Required
+		AlwaysDefaultStringVar: genv.Var("ALWAYS_DEFAULT_STRING_VAR").
 			Default("default value", genv.WithAllowDefaultAlways()).
 			String(),
-		OptionalFloatVar: genv.New("OPTIONAL_FLOAT_VAR").Optional().Float64(),
-		AdvancedURLVar: genv.New("ADVANCED_URL_VAR").
+		OptionalFloatVar: genv.Var("OPTIONAL_FLOAT_VAR").Optional().Float64(),
+		AdvancedURLVar: genv.Var("ADVANCED_URL_VAR").
 			Default(
 				"https://example.com",
 				genv.WithAllowDefault(func(*goenvvars.Genv) bool {
@@ -60,7 +60,7 @@ func NewExample() (example *Example, err error) {
 			Optional().
 			URL(),
 		ManyIntVar: genv.
-			New("MANY_INT_VAR").
+			Var("MANY_INT_VAR").
 			Optional().
 			Default("123,456,", genv.WithAllowDefaultAlways()).
 			ManyInt(),
