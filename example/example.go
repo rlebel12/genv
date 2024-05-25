@@ -1,21 +1,24 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 	"math/rand"
 	"net/url"
-	"os"
 
 	"github.com/rlebel12/goenvvars/v3"
 )
 
 func main() {
-	_, err := NewExample()
-	if err != nil {
-		slog.Error("failed to create example", "error", err)
-		os.Exit(1)
-	}
+	example := NewExample()
+	slog.Info("Example",
+		"StringVar", example.StringVar,
+		"IntVar", example.IntVar,
+		"BoolVar", example.BoolVar,
+		"AlwaysDefaultStringVar", example.AlwaysDefaultStringVar,
+		"OptionalFloatVar", example.OptionalFloatVar,
+		"AdvancedURLVar", example.AdvancedURLVar,
+		"ManyIntVar", example.ManyIntVar,
+	)
 }
 
 type Example struct {
@@ -28,21 +31,15 @@ type Example struct {
 	ManyIntVar             []int
 }
 
-func NewExample() (example *Example, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("failed to create genv: %w", r.(error))
-		}
-	}()
+func NewExample() *Example {
+	genv := goenvvars.New(
+		goenvvars.WithAllowDefault(func(*goenvvars.Genv) bool {
+			return false
+		}),
+		goenvvars.WithSplitKey(";"),
+	)
 
-	genv := goenvvars.New(goenvvars.WithAllowDefault(func(*goenvvars.Genv) bool {
-		return false
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create genv: %w", err)
-	}
-
-	example = &Example{
+	return &Example{
 		StringVar: genv.Var("STRING_VAR").String(), // Required
 		IntVar:    genv.Var("INT_VAR").Int(),       // Required
 		BoolVar:   genv.Var("BOOL_VAR").Bool(),     // Required
@@ -62,8 +59,7 @@ func NewExample() (example *Example, err error) {
 		ManyIntVar: genv.
 			Var("MANY_INT_VAR").
 			Optional().
-			Default("123,456,", genv.WithAllowDefaultAlways()).
+			Default("123;456;", genv.WithAllowDefaultAlways()).
 			ManyInt(),
 	}
-	return
 }
