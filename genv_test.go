@@ -170,22 +170,6 @@ func TestDefault(t *testing.T) {
 	}
 }
 
-func TestPresence(t *testing.T) {
-	t.Run("Present", func(t *testing.T) {
-		t.Setenv("TEST_VAR", "val")
-		assert.True(t, Presence("TEST_VAR"))
-	})
-
-	t.Run("Absent", func(t *testing.T) {
-		assert.False(t, Presence("TEST_VAR"))
-	})
-
-	t.Run("Empty", func(t *testing.T) {
-		t.Setenv("TEST_VAR", "")
-		assert.False(t, Presence("TEST_VAR"))
-	})
-}
-
 func TestEVarString(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -596,4 +580,29 @@ func TestManyEvarURL(t *testing.T) {
 		ev := &envVar{key: "TEST_VAR", value: "", optional: true}
 		assert.Empty(t, ev.ManyURL())
 	})
+}
+
+func TestPresent(t *testing.T) {
+	present := "present"
+	empty := ""
+	for name, test := range map[string]struct {
+		val      *string
+		expected bool
+	}{
+		"present": {&present, true},
+		"empty":   {&empty, false},
+		"absent":  {nil, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if test.val != nil {
+				t.Setenv("TEST_VAR", *test.val)
+			}
+			actual := newGenv().Present("TEST_VAR")
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
+func newGenv() *Genv {
+	return New(WithAllowDefault(func(*Genv) bool { return true }))
 }

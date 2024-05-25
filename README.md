@@ -90,5 +90,5 @@ See the `example` package for a more complete demonstration of how this package 
 It is also possible to simply check whether an environment variable has been set to a non-empty value:
 
 ```go
-var PresenceVar = genv.Presence("PRESENCE")
+var PresentVar = genv.Present("PRESENT")
 ```

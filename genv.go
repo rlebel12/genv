@@ -286,6 +286,12 @@ func (ev *envVar) ManyURL(opts ...manyOpt) []*url.URL {
 	return ret
 }
 
+// Returns true if the environment variable with the given key is set and non-empty
+func (genv *Genv) Present(key string) bool {
+	result := genv.Var(key).Optional().String()
+	return result != ""
+}
+
 func parseMany[T any](ev *envVar, parser func(*envVar) (T, error), opts ...manyOpt) ([]T, error) {
 	for _, opt := range opts {
 		opt(ev)
@@ -318,12 +324,6 @@ func parseMany[T any](ev *envVar, parser func(*envVar) (T, error), opts ...manyO
 		result[i] = val
 	}
 	return result, nil
-}
-
-// Returns true if the environment variable with the given key is set and non-empty
-func Presence(key string) bool {
-	val, ok := os.LookupEnv(key)
-	return ok && val != ""
 }
 
 type envVarOpt func(*envVar)
