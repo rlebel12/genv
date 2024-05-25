@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"net/url"
 
-	"github.com/rlebel12/goenvvars/v3"
+	"github.com/rlebel12/genv"
 )
 
 func main() {
@@ -32,34 +32,34 @@ type Example struct {
 }
 
 func NewExample() *Example {
-	genv := goenvvars.New(
-		goenvvars.WithAllowDefault(func(*goenvvars.Genv) bool {
+	env := genv.New(
+		genv.WithAllowDefault(func(*genv.Genv) bool {
 			return false
 		}),
-		goenvvars.WithSplitKey(";"),
+		genv.WithSplitKey(";"),
 	)
 
 	return &Example{
-		StringVar: genv.Var("STRING_VAR").String(), // Required
-		IntVar:    genv.Var("INT_VAR").Int(),       // Required
-		BoolVar:   genv.Var("BOOL_VAR").Bool(),     // Required
-		AlwaysDefaultStringVar: genv.Var("ALWAYS_DEFAULT_STRING_VAR").
-			Default("default value", genv.WithAllowDefaultAlways()).
+		StringVar: env.Var("STRING_VAR").String(), // Required
+		IntVar:    env.Var("INT_VAR").Int(),       // Required
+		BoolVar:   env.Var("BOOL_VAR").Bool(),     // Required
+		AlwaysDefaultStringVar: env.Var("ALWAYS_DEFAULT_STRING_VAR").
+			Default("default value", env.WithAllowDefaultAlways()).
 			String(),
-		OptionalFloatVar: genv.Var("OPTIONAL_FLOAT_VAR").Optional().Float64(),
-		AdvancedURLVar: genv.Var("ADVANCED_URL_VAR").
+		OptionalFloatVar: env.Var("OPTIONAL_FLOAT_VAR").Optional().Float64(),
+		AdvancedURLVar: env.Var("ADVANCED_URL_VAR").
 			Default(
 				"https://example.com",
-				genv.WithAllowDefault(func(*goenvvars.Genv) bool {
+				env.WithAllowDefault(func(*genv.Genv) bool {
 					return rand.Float32() < 0.5 // 50% chance to use the default
 				}),
 			).
 			Optional().
 			URL(),
-		ManyIntVar: genv.
+		ManyIntVar: env.
 			Var("MANY_INT_VAR").
 			Optional().
-			Default("123;456;", genv.WithAllowDefaultAlways()).
+			Default("123;456;", env.WithAllowDefaultAlways()).
 			ManyInt(),
 	}
 }

@@ -1,4 +1,4 @@
-package goenvvars
+package genv
 
 import (
 	"testing"

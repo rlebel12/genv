@@ -1,26 +1,26 @@
-# goenvvars
-[![Go Reference](https://pkg.go.dev/badge/github.com/rlebel12/goenvvars/v3.svg)](https://pkg.go.dev/github.com/rlebel12/goenvvars/v3)
-[![Test](https://github.com/rlebel12/goenvvars/actions/workflows/test.yml/badge.svg)](https://github.com/rlebel12/goenvvars/actions/workflows/test.yml)
+# genv
+[![Go Reference](https://pkg.go.dev/badge/github.com/rlebel12/genv.svg)](https://pkg.go.dev/github.com/rlebel12/genv)
+[![Test](https://github.com/rlebel12/genv/actions/workflows/test.yml/badge.svg)](https://github.com/rlebel12/genv/actions/workflows/test.yml)
 
 A small package to help work with environment variables in Go.
 
 ## Installation
 ```console
-go get github.com/rlebel12/goenvvars/v3
+go get github.com/rlebel12/genv
 ```
 
 ## Usage
 
 First, ensure that the package is imported:
 ```go
-import "github.com/rlebel12/goenvvars/v3"
+import "github.com/rlebel12/genv"
 ```
 
 ### Basic
 In its most basic form, the package can be used to retrieve environment variables and then parse them into specified types:
 
 ```go
-var genv := goenvvars.New()
+var genv := genv.New()
 var StringVar = genv.Var("STRING_VAR").String()
 var BoolVar = genv.Var("BOOL_VAR").Bool()
 var IntVar = genv.Var("INT_VAR").Int()
@@ -54,8 +54,8 @@ This is intended to be used to allow speed and ease of development while ensurin
 Override the behavior for all subsequent invocations of `genv.Var`:
 
 ```go
-var genv := goenvvars.New(
-    goenvvars.WithAllowDefault(func() bool { return true }),
+var genv := genv.New(
+    genv.WithAllowDefault(func() bool { return true }),
 )
 ```
 
@@ -90,5 +90,5 @@ See the `example` package for a more complete demonstration of how this package 
 It is also possible to simply check whether an environment variable has been set to a non-empty value:
 
 ```go
-var PresenceVar = goenvvars.Presence("PRESENCE")
+var PresenceVar = genv.Presence("PRESENCE")
 ```
