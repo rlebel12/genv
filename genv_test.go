@@ -26,7 +26,7 @@ func TestWithAllowDefault(t *testing.T) {
 
 func TestConstructor(t *testing.T) {
 	for name, test := range map[string]struct {
-		fn func(ev *Genv, key string, opts ...envVarOpt) *envVar
+		fn func(ev *Genv, key string, opts ...envVarOpt) *Var
 	}{
 		"New": {(*Genv).Var},
 	} {
@@ -40,7 +40,7 @@ func TestConstructor(t *testing.T) {
 			}{
 				"Defined":     {"val", nil, "val", true},
 				"Undefined":   {"", nil, "", false},
-				"WithOptions": {"val", []envVarOpt{func(e *envVar) { e.value = "opts" }}, "opts", true},
+				"WithOptions": {"val", []envVarOpt{func(e *Var) { e.value = "opts" }}, "opts", true},
 			} {
 				t.Run(name, func(t *testing.T) {
 					const key = "TEST_VAR"
@@ -49,7 +49,7 @@ func TestConstructor(t *testing.T) {
 					}
 					genv := New()
 					actual := fn(genv, key, test.opts...)
-					expected := &envVar{
+					expected := &Var{
 						key:      key,
 						value:    test.expectedValue,
 						found:    test.expectedFound,
@@ -159,7 +159,7 @@ func TestDefault(t *testing.T) {
 				fallbackOpts[i] = genv.WithAllowDefault(opt)
 			}
 			opts = append(opts, fallbackOpts...)
-			actual := (*envVar).Default(
+			actual := (*Var).Default(
 				genv.Var("TEST_VAR"),
 				"default",
 				opts...,
@@ -181,7 +181,7 @@ func TestEVarString(t *testing.T) {
 		{"Invalid", "", "", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := envVar{key: "TEST_VAR", value: test.value}
+			ev := Var{key: "TEST_VAR", value: test.value}
 			if test.panics {
 				assert.Panics(t, func() { _ = ev.String() })
 			} else {
@@ -202,7 +202,7 @@ func TestEVarTryString(t *testing.T) {
 		{"Invalid", "", "", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := envVar{key: "TEST_VAR", value: test.value}
+			ev := Var{key: "TEST_VAR", value: test.value}
 			actual, err := ev.TryString()
 			if test.err {
 				assert.Error(t, err)
@@ -216,17 +216,17 @@ func TestEVarTryString(t *testing.T) {
 
 func TestManyEvarString(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "val1,val2", splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "val1,val2", splitKey: ","}
 		assert.Equal(t, []string{"val1", "val2"}, ev.ManyString())
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: ""}
+		ev := &Var{key: "TEST_VAR", value: ""}
 		assert.Panics(t, func() { ev.ManyString() })
 	})
 
 	t.Run(("Empty"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "", optional: true}
+		ev := &Var{key: "TEST_VAR", value: "", optional: true}
 		assert.Empty(t, ev.ManyString())
 	})
 }
@@ -244,7 +244,7 @@ func TestTryManyEvarString(t *testing.T) {
 		{"Optional", "", true, []string{}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := &envVar{key: "TEST_VAR", value: test.value, splitKey: ","}
+			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
 			if test.optional {
 				ev = ev.Optional()
 			}
@@ -261,14 +261,14 @@ func TestTryManyEvarString(t *testing.T) {
 
 func TestEVarBool(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: "true"}
+		ev := Var{key: "TEST_VAR", value: "true"}
 		assert.True(t, ev.Bool())
 		ev.value = "false"
 		assert.False(t, ev.Bool())
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: "invalid"}
+		ev := Var{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.Bool() })
 	})
 }
@@ -286,7 +286,7 @@ func TestEVarTryBool(t *testing.T) {
 		{"Invalid", "invalid", false, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := envVar{key: "TEST_VAR", value: test.value}
+			ev := Var{key: "TEST_VAR", value: test.value}
 			actual, err := ev.TryBool()
 			if test.err {
 				assert.Error(t, err)
@@ -300,17 +300,17 @@ func TestEVarTryBool(t *testing.T) {
 
 func TestManyEvarBool(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "true,false", splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "true,false", splitKey: ","}
 		assert.Equal(t, []bool{true, false}, ev.ManyBool())
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "invalid"}
+		ev := &Var{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.ManyBool() })
 	})
 
 	t.Run(("Empty"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "", optional: true}
+		ev := &Var{key: "TEST_VAR", value: "", optional: true}
 		assert.Empty(t, ev.ManyBool())
 	})
 }
@@ -329,7 +329,7 @@ func TestTryManyEvarBool(t *testing.T) {
 		{"Invalid", "invalid", false, []bool{}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := &envVar{key: "TEST_VAR", value: test.value, splitKey: ","}
+			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
 			if test.optional {
 				ev = ev.Optional()
 			}
@@ -346,12 +346,12 @@ func TestTryManyEvarBool(t *testing.T) {
 
 func TestEvarInt(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: "123"}
+		ev := Var{key: "TEST_VAR", value: "123"}
 		assert.Equal(t, 123, ev.Int())
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: "invalid"}
+		ev := Var{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.Int() })
 	})
 }
@@ -370,7 +370,7 @@ func TestEvarTryInt(t *testing.T) {
 		{"Invalid", "invalid", false, 0, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := envVar{key: "TEST_VAR", value: test.value}
+			ev := Var{key: "TEST_VAR", value: test.value}
 			if test.optional {
 				ev = *ev.Optional()
 			}
@@ -387,17 +387,17 @@ func TestEvarTryInt(t *testing.T) {
 
 func TestManyEvarInt(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "123,456", splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "123,456", splitKey: ","}
 		assert.Equal(t, []int{123, 456}, ev.ManyInt())
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "invalid", splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "invalid", splitKey: ","}
 		assert.Panics(t, func() { ev.ManyInt() })
 	})
 
 	t.Run(("Empty"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
 		assert.Empty(t, ev.ManyInt())
 	})
 }
@@ -416,7 +416,7 @@ func TestTryManyEvarInt(t *testing.T) {
 		{"Invalid", "invalid", false, []int{}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := &envVar{key: "TEST_VAR", value: test.value, splitKey: ","}
+			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
 			if test.optional {
 				ev = ev.Optional()
 			}
@@ -433,12 +433,12 @@ func TestTryManyEvarInt(t *testing.T) {
 
 func TestEvarFloat64(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: "123.456"}
+		ev := Var{key: "TEST_VAR", value: "123.456"}
 		assert.Equal(t, 123.456, ev.Float64())
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: "invalid"}
+		ev := Var{key: "TEST_VAR", value: "invalid"}
 		assert.Panics(t, func() { ev.Float64() })
 	})
 }
@@ -457,7 +457,7 @@ func TestEvarTryFloat64(t *testing.T) {
 		{"Invalid", "invalid", false, 0.0, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := envVar{key: "TEST_VAR", value: test.value}
+			ev := Var{key: "TEST_VAR", value: test.value}
 			if test.optional {
 				ev = *ev.Optional()
 			}
@@ -474,17 +474,17 @@ func TestEvarTryFloat64(t *testing.T) {
 
 func TestEvarManyFloat64(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "123.456,456.789", splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "123.456,456.789", splitKey: ","}
 		assert.Equal(t, []float64{123.456, 456.789}, ev.ManyFloat64())
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "invalid", splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "invalid", splitKey: ","}
 		assert.Panics(t, func() { ev.ManyFloat64() })
 	})
 
 	t.Run(("Empty"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
 		assert.Empty(t, ev.ManyFloat64())
 	})
 }
@@ -503,7 +503,7 @@ func TestTryManyEvarFloat64(t *testing.T) {
 		{"Invalid", "invalid", false, []float64{}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := &envVar{key: "TEST_VAR", value: test.value, splitKey: ","}
+			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
 			if test.optional {
 				ev = ev.Optional()
 			}
@@ -520,7 +520,7 @@ func TestTryManyEvarFloat64(t *testing.T) {
 
 func TestEvarURL(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: "http://example.com:8080"}
+		ev := Var{key: "TEST_VAR", value: "http://example.com:8080"}
 		url := ev.URL()
 		assert.Equal(t, "http", url.Scheme)
 		assert.Equal(t, "example.com", url.Hostname())
@@ -529,7 +529,7 @@ func TestEvarURL(t *testing.T) {
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
-		ev := envVar{key: "TEST_VAR", value: "http://invalid url"}
+		ev := Var{key: "TEST_VAR", value: "http://invalid url"}
 		assert.Panics(t, func() { ev.URL() })
 	})
 }
@@ -548,7 +548,7 @@ func TestEvarTryURL(t *testing.T) {
 		{"Invalid", "http://invalid url", false, "", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ev := envVar{key: "TEST_VAR", value: test.value}
+			ev := Var{key: "TEST_VAR", value: test.value}
 			if test.optional {
 				ev = *ev.Optional()
 			}
@@ -565,19 +565,19 @@ func TestEvarTryURL(t *testing.T) {
 
 func TestManyEvarURL(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "http://example.com:8080,http://example.com:8081", splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "http://example.com:8080,http://example.com:8081", splitKey: ","}
 		urls := ev.ManyURL()
 		assert.Equal(t, "http://example.com:8080", urls[0].String())
 		assert.Equal(t, "http://example.com:8081", urls[1].String())
 	})
 
 	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "http://invalid url", splitKey: ","}
+		ev := &Var{key: "TEST_VAR", value: "http://invalid url", splitKey: ","}
 		assert.Panics(t, func() { ev.ManyURL() })
 	})
 
 	t.Run(("Empty"), func(t *testing.T) {
-		ev := &envVar{key: "TEST_VAR", value: "", optional: true}
+		ev := &Var{key: "TEST_VAR", value: "", optional: true}
 		assert.Empty(t, ev.ManyURL())
 	})
 }
