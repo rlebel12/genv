@@ -403,19 +403,18 @@ func TestManyEvarInt(t *testing.T) {
 }
 
 func TestTryManyEvarInt(t *testing.T) {
-	for _, test := range []struct {
-		name     string
+	for name, test := range map[string]struct {
 		value    string
 		optional bool
 		expected []int
 		err      bool
 	}{
-		{"Valid", "123,456", false, []int{123, 456}, false},
-		{"Empty", "", false, []int{}, true},
-		{"Optional", "", true, []int{}, false},
-		{"Invalid", "invalid", false, []int{}, true},
+		"valid":    {"123,456", false, []int{123, 456}, false},
+		"empty":    {"", false, []int{}, true},
+		"optional": {"", true, []int{}, false},
+		"invalid":  {"invalid", false, []int{}, true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(name, func(t *testing.T) {
 			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
 			if test.optional {
 				ev = ev.Optional()
@@ -444,19 +443,18 @@ func TestEvarFloat64(t *testing.T) {
 }
 
 func TestEvarTryFloat64(t *testing.T) {
-	for _, test := range []struct {
-		name     string
+	for name, test := range map[string]struct {
 		value    string
 		optional bool
 		expected float64
 		err      bool
 	}{
-		{"Valid", "123.456", false, 123.456, false},
-		{"Empty", "", false, 0.0, true},
-		{"Optional", "", true, 0.0, false},
-		{"Invalid", "invalid", false, 0.0, true},
+		"valid":    {"123.456", false, 123.456, false},
+		"empty":    {"", false, 0.0, true},
+		"optional": {"", true, 0.0, false},
+		"invalid":  {"invalid", false, 0.0, true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(name, func(t *testing.T) {
 			ev := Var{key: "TEST_VAR", value: test.value}
 			if test.optional {
 				ev = *ev.Optional()
