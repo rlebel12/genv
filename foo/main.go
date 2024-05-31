@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log/slog"
 	"net/http"
+
+	"github.com/aws/aws-lambda-go/lambda"
 )
 
 func main() {
@@ -10,6 +11,5 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, World!"))
 	})
-	slog.Info("Server started on port 8080")
-	http.ListenAndServe(":8080", mux)
+	lambda.Start(mux)
 }
