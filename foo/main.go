@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 )
 
 func main() {
@@ -11,5 +12,7 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, World!"))
 	})
-	lambda.Start(mux)
+
+	adapter := httpadapter.NewV2(mux)
+	lambda.Start(adapter.ProxyWithContext)
 }
