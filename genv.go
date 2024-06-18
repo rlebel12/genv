@@ -116,11 +116,7 @@ func (genv *Genv) WithSplitKey(splitKey string) manyOpt {
 }
 
 func (ev *Var) String() string {
-	ret, err := ev.TryString()
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParse(ev, (*Var).TryString)
 }
 
 func (ev *Var) TryString() (string, error) {
@@ -142,11 +138,7 @@ func (ev *Var) ManyString(opts ...manyOpt) []string {
 }
 
 func (ev *Var) Bool() bool {
-	ret, err := ev.TryBool()
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParse(ev, (*Var).TryBool)
 }
 
 func (ev *Var) TryBool() (bool, error) {
@@ -166,11 +158,7 @@ func (ev *Var) ManyBool(opts ...manyOpt) []bool {
 }
 
 func (ev *Var) Int() int {
-	ret, err := ev.TryInt()
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParse(ev, (*Var).TryInt)
 }
 
 func (ev *Var) TryInt() (int, error) {
@@ -190,11 +178,7 @@ func (ev *Var) ManyInt(opts ...manyOpt) []int {
 }
 
 func (ev *Var) Float64() float64 {
-	ret, err := ev.TryFloat64()
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParse(ev, (*Var).TryFloat64)
 }
 
 func (ev *Var) TryFloat64() (float64, error) {
@@ -220,11 +204,7 @@ func (ev *Var) ManyFloat64(opts ...manyOpt) []float64 {
 // if a scheme is not specified. See the documentation for
 // url.Parse for more information.
 func (ev *Var) URL() *url.URL {
-	ret, err := ev.TryURL()
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParse(ev, (*Var).TryURL)
 }
 
 // Returns the value of the environment variable as a URL.
@@ -277,6 +257,14 @@ func parse[T any](ev *Var, parse func(string) (T, error)) (T, error) {
 		return result, fmt.Errorf(errFmt, ev.key, ev.value, err)
 	}
 	return result, nil
+}
+
+func mustParse[T any](ev *Var, parse func(*Var) (T, error)) T {
+	result, err := parse(ev)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 func parseMany[T any](ev *Var, parse func(*Var) (T, error), opts ...manyOpt) ([]T, error) {
