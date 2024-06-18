@@ -150,9 +150,7 @@ func (ev *Var) Bool() bool {
 }
 
 func (ev *Var) TryBool() (bool, error) {
-	return parse(ev, func(value string) (bool, error) {
-		return strconv.ParseBool(value)
-	})
+	return parse(ev, strconv.ParseBool)
 }
 
 func (ev *Var) TryManyBool(opts ...manyOpt) ([]bool, error) {
@@ -176,9 +174,7 @@ func (ev *Var) Int() int {
 }
 
 func (ev *Var) TryInt() (int, error) {
-	return parse(ev, func(value string) (int, error) {
-		return strconv.Atoi(value)
-	})
+	return parse(ev, strconv.Atoi)
 }
 
 func (ev *Var) TryManyInt(opts ...manyOpt) ([]int, error) {
@@ -236,9 +232,7 @@ func (ev *Var) URL() *url.URL {
 // if a scheme is not specified. See the documentation for
 // url.Parse for more information.
 func (ev *Var) TryURL() (*url.URL, error) {
-	return parse(ev, func(value string) (*url.URL, error) {
-		return url.Parse(value)
-	})
+	return parse(ev, url.Parse)
 }
 
 func (ev *Var) TryManyURL(opts ...manyOpt) ([]*url.URL, error) {
