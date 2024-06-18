@@ -555,7 +555,11 @@ func TestEvarTryURL(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual.String())
+				if test.expected == "" {
+					assert.Nil(t, actual)
+				} else {
+					assert.Equal(t, test.expected, actual.String())
+				}
 			}
 		})
 	}

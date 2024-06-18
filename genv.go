@@ -124,10 +124,9 @@ func (ev *Var) String() string {
 }
 
 func (ev *Var) TryString() (string, error) {
-	if err := ev.validate(); err != nil {
-		return "", fmt.Errorf("invalid string environment variable for %s ('%s'): %w", ev.key, ev.value, err)
-	}
-	return ev.value, nil
+	return parse(ev, func(value string) (string, error) {
+		return value, nil
+	})
 }
 
 func (ev *Var) TryManyString(opts ...manyOpt) ([]string, error) {
@@ -151,17 +150,9 @@ func (ev *Var) Bool() bool {
 }
 
 func (ev *Var) TryBool() (bool, error) {
-	if err := ev.validate(); err != nil {
-		return false, err
-	}
-	if ev.value == "" {
-		return false, nil
-	}
-	ret, err := strconv.ParseBool(ev.value)
-	if err != nil {
-		return false, fmt.Errorf("invalid boolean environment variable for %s ('%s'): %w", ev.key, ev.value, err)
-	}
-	return ret, nil
+	return parse(ev, func(value string) (bool, error) {
+		return strconv.ParseBool(value)
+	})
 }
 
 func (ev *Var) TryManyBool(opts ...manyOpt) ([]bool, error) {
@@ -185,17 +176,9 @@ func (ev *Var) Int() int {
 }
 
 func (ev *Var) TryInt() (int, error) {
-	if err := ev.validate(); err != nil {
-		return 0, fmt.Errorf("invalid integer environment variable for %s ('%s'): %w", ev.key, ev.value, err)
-	}
-	if ev.value == "" {
-		return 0, nil
-	}
-	ret, err := strconv.Atoi(ev.value)
-	if err != nil {
-		return 0, fmt.Errorf("invalid integer environment variable for %s ('%s'): %w", ev.key, ev.value, err)
-	}
-	return ret, nil
+	return parse(ev, func(value string) (int, error) {
+		return strconv.Atoi(value)
+	})
 }
 
 func (ev *Var) TryManyInt(opts ...manyOpt) ([]int, error) {
@@ -219,17 +202,9 @@ func (ev *Var) Float64() float64 {
 }
 
 func (ev *Var) TryFloat64() (float64, error) {
-	if err := ev.validate(); err != nil {
-		return 0, fmt.Errorf("invalid float environment variable for %s ('%s'): %w", ev.key, ev.value, err)
-	}
-	if ev.value == "" {
-		return 0, nil
-	}
-	ret, err := strconv.ParseFloat(ev.value, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid float environment variable for %s ('%s'): %w", ev.key, ev.value, err)
-	}
-	return ret, nil
+	return parse(ev, func(value string) (float64, error) {
+		return strconv.ParseFloat(value, 64)
+	})
 }
 
 func (ev *Var) TryManyFloat64(opts ...manyOpt) ([]float64, error) {
@@ -261,17 +236,9 @@ func (ev *Var) URL() *url.URL {
 // if a scheme is not specified. See the documentation for
 // url.Parse for more information.
 func (ev *Var) TryURL() (*url.URL, error) {
-	if err := ev.validate(); err != nil {
-		return &url.URL{}, fmt.Errorf("invalid URL environment variable for %s ('%s'): %w", ev.key, ev.value, err)
-	}
-	if ev.value == "" {
-		return &url.URL{}, nil
-	}
-	ret, err := url.Parse(ev.value)
-	if err != nil {
-		return &url.URL{}, fmt.Errorf("invalid URL environment variable for %s ('%s'): %w", ev.key, ev.value, err)
-	}
-	return ret, nil
+	return parse(ev, func(value string) (*url.URL, error) {
+		return url.Parse(value)
+	})
 }
 
 func (ev *Var) TryManyURL(opts ...manyOpt) ([]*url.URL, error) {
@@ -292,10 +259,37 @@ func (genv *Genv) Present(key string) bool {
 	return result != ""
 }
 
-func parseMany[T any](ev *Var, parser func(*Var) (T, error), opts ...manyOpt) ([]T, error) {
+func parse[T any](ev *Var, parse func(string) (T, error)) (T, error) {
+	const errFmt = "invalid environment variable for %s ('%s'): %w"
+
+	var (
+		result T
+		err    error
+	)
+
+	if err = ev.validate(); err != nil {
+		return result, fmt.Errorf(errFmt, ev.key, ev.value, err)
+	}
+
+	if ev.value == "" {
+		// If validation succeeded, then the value being empty means it was
+		// optional (or just an empty string is the desired output).
+		// In that case, use the zero value.
+		return result, nil
+	}
+
+	result, err = parse(ev.value)
+	if err != nil {
+		return result, fmt.Errorf(errFmt, ev.key, ev.value, err)
+	}
+	return result, nil
+}
+
+func parseMany[T any](ev *Var, parse func(*Var) (T, error), opts ...manyOpt) ([]T, error) {
 	for _, opt := range opts {
 		opt(ev)
 	}
+
 	split := strings.Split(ev.value, ev.splitKey)
 	vars := make([]Var, 0, len(split))
 	for _, val := range split {
@@ -317,7 +311,7 @@ func parseMany[T any](ev *Var, parser func(*Var) (T, error), opts ...manyOpt) ([
 
 	result := make([]T, len(vars))
 	for i, ev := range vars {
-		val, err := parser(&ev)
+		val, err := parse(&ev)
 		if err != nil {
 			return nil, fmt.Errorf("invalid environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 		}
