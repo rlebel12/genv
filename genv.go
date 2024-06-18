@@ -130,11 +130,7 @@ func (ev *Var) TryManyString(opts ...manyOpt) ([]string, error) {
 }
 
 func (ev *Var) ManyString(opts ...manyOpt) []string {
-	ret, err := ev.TryManyString(opts...)
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParseMany(ev, (*Var).TryString, opts...)
 }
 
 func (ev *Var) Bool() bool {
@@ -150,11 +146,7 @@ func (ev *Var) TryManyBool(opts ...manyOpt) ([]bool, error) {
 }
 
 func (ev *Var) ManyBool(opts ...manyOpt) []bool {
-	ret, err := ev.TryManyBool(opts...)
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParseMany(ev, (*Var).TryBool, opts...)
 }
 
 func (ev *Var) Int() int {
@@ -170,11 +162,7 @@ func (ev *Var) TryManyInt(opts ...manyOpt) ([]int, error) {
 }
 
 func (ev *Var) ManyInt(opts ...manyOpt) []int {
-	ret, err := ev.TryManyInt(opts...)
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParseMany(ev, (*Var).TryInt, opts...)
 }
 
 func (ev *Var) Float64() float64 {
@@ -192,11 +180,7 @@ func (ev *Var) TryManyFloat64(opts ...manyOpt) ([]float64, error) {
 }
 
 func (ev *Var) ManyFloat64(opts ...manyOpt) []float64 {
-	ret, err := ev.TryManyFloat64(opts...)
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParseMany(ev, (*Var).TryFloat64, opts...)
 }
 
 // Returns the value of the environment variable as a URL.
@@ -220,11 +204,7 @@ func (ev *Var) TryManyURL(opts ...manyOpt) ([]*url.URL, error) {
 }
 
 func (ev *Var) ManyURL(opts ...manyOpt) []*url.URL {
-	ret, err := ev.TryManyURL(opts...)
-	if err != nil {
-		panic(err)
-	}
-	return ret
+	return mustParseMany(ev, (*Var).TryURL, opts...)
 }
 
 // Returns true if the environment variable with the given key is set and non-empty
@@ -300,6 +280,14 @@ func parseMany[T any](ev *Var, parse func(*Var) (T, error), opts ...manyOpt) ([]
 		result[i] = val
 	}
 	return result, nil
+}
+
+func mustParseMany[T any](ev *Var, parse func(*Var) (T, error), opts ...manyOpt) []T {
+	result, err := parseMany(ev, parse, opts...)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 type envVarOpt func(*Var)
