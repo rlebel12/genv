@@ -210,14 +210,15 @@ func (genv *Genv) Present(key string) bool {
 	return result != ""
 }
 
+const errFmtInvalidVar = "%s is invalid: %w"
+
 func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
-	const errFmt = "%s is invalid: %w"
 
 	var result T
 	var err error
 
 	if !ev.optional && ev.value == "" {
-		return result, fmt.Errorf(errFmt, ev.key, ErrRequiredEnvironmentVariable)
+		return result, fmt.Errorf(errFmtInvalidVar, ev.key, ErrRequiredEnvironmentVariable)
 	}
 
 	if ev.value == "" {
@@ -229,7 +230,7 @@ func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
 
 	result, err = fn(ev.value)
 	if err != nil {
-		return result, fmt.Errorf(errFmt, ev.key, err)
+		return result, fmt.Errorf(errFmtInvalidVar, ev.key, err)
 	}
 	return result, nil
 }
@@ -269,14 +270,14 @@ func parseMany[T any](ev *Var, fn func(*Var) (T, error), opts ...manyOpt) ([]T, 
 		})
 	}
 	if !ev.optional && len(vars) == 0 {
-		return nil, ErrRequiredEnvironmentVariable
+		return nil, fmt.Errorf(errFmtInvalidVar, ev.key, ErrRequiredEnvironmentVariable)
 	}
 
 	result := make([]T, len(vars))
 	for i, ev := range vars {
 		val, err := fn(&ev)
 		if err != nil {
-			return nil, fmt.Errorf("invalid environment variable for %s ('%s'): %w", ev.key, ev.value, err)
+			return nil, fmt.Errorf(errFmtInvalidVar, ev.key, err)
 		}
 		result[i] = val
 	}
