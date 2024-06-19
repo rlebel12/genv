@@ -17,14 +17,15 @@ type (
 )
 
 func New(opts ...genvOpt) *Genv {
-	genv := new(Genv)
-	genv.allowDefault = func(genv *Genv) bool {
-		return genv.
-			Var("GENV_ALLOW_DEFAULT").
-			Default("false", genv.WithAllowDefaultAlways()).
-			Bool()
+	genv := &Genv{
+		allowDefault: func(genv *Genv) bool {
+			return genv.
+				Var("GENV_ALLOW_DEFAULT").
+				Default("false", genv.WithAllowDefaultAlways()).
+				Bool()
+		},
+		splitKey: ",",
 	}
-	genv.splitKey = ","
 
 	for _, opt := range opts {
 		opt(genv)
