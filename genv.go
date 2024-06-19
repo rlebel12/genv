@@ -1,6 +1,7 @@
 package genv
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -210,13 +211,13 @@ func (genv *Genv) Present(key string) bool {
 }
 
 func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
-	const errFmt = "invalid environment variable for %s ('%s'): %w"
+	const errFmt = "%s is invalid: %w"
 
 	var result T
 	var err error
 
 	if err = ev.validate(); err != nil {
-		return result, fmt.Errorf(errFmt, ev.key, ev.value, err)
+		return result, fmt.Errorf(errFmt, ev.key, err)
 	}
 
 	if ev.value == "" {
@@ -228,7 +229,7 @@ func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
 
 	result, err = fn(ev.value)
 	if err != nil {
-		return result, fmt.Errorf(errFmt, ev.key, ev.value, err)
+		return result, fmt.Errorf(errFmt, ev.key, err)
 	}
 	return result, nil
 }
@@ -240,6 +241,8 @@ func mustParse[T any](ev *Var, fn func(*Var) (T, error)) T {
 	}
 	return result
 }
+
+var ErrRequiredEnvironmentVariable = errors.New("environment variable is empty or unset")
 
 func parseMany[T any](ev *Var, fn func(*Var) (T, error), opts ...manyOpt) ([]T, error) {
 	for _, opt := range opts {
@@ -262,7 +265,7 @@ func parseMany[T any](ev *Var, fn func(*Var) (T, error), opts ...manyOpt) ([]T, 
 		})
 	}
 	if !ev.optional && len(vars) == 0 {
-		return nil, fmt.Errorf("missing required environment variable: %s", ev.key)
+		return nil, ErrRequiredEnvironmentVariable
 	}
 
 	result := make([]T, len(vars))
@@ -288,7 +291,7 @@ type envVarOpt func(*Var)
 
 func (ev *Var) validate() error {
 	if !ev.optional && ev.value == "" {
-		return fmt.Errorf("missing required environment variable: %s", ev.key)
+		return ErrRequiredEnvironmentVariable
 	}
 	return nil
 }

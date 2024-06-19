@@ -40,9 +40,9 @@ func NewExample() *Example {
 	)
 
 	return &Example{
-		StringVar: env.Var("STRING_VAR").String(), // Required
-		IntVar:    env.Var("INT_VAR").Int(),       // Required
-		BoolVar:   env.Var("BOOL_VAR").Bool(),     // Required
+		StringVar: env.Var("STRING_VAR").String(),             // Required
+		IntVar:    env.Var("INT_VAR").Int(),                   // Required
+		BoolVar:   env.Var("BOOL_VAR").Default("true").Bool(), // Required because defaults disallowed above
 		AlwaysDefaultStringVar: env.Var("ALWAYS_DEFAULT_STRING_VAR").
 			Default("default value", env.WithAllowDefaultAlways()).
 			String(),
