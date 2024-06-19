@@ -116,29 +116,25 @@ func (genv *Genv) WithSplitKey(splitKey string) manyOpt {
 }
 
 func (ev *Var) String() string {
-	return mustParse(ev, (*Var).TryString)
+	return mustParse(ev, (*Var).parseString)
 }
 
-func (ev *Var) TryString() (string, error) {
+func (ev *Var) ManyString(opts ...manyOpt) []string {
+	return mustParseMany(ev, (*Var).parseString, opts...)
+}
+
+func (ev *Var) parseString() (string, error) {
 	return parse(ev, func(value string) (string, error) {
 		return value, nil
 	})
 }
 
-func (ev *Var) TryManyString(opts ...manyOpt) ([]string, error) {
-	return parseMany(ev, (*Var).TryString, opts...)
-}
-
-func (ev *Var) ManyString(opts ...manyOpt) []string {
-	return mustParseMany(ev, (*Var).TryString, opts...)
+func (ev *Var) TryBool() (bool, error) {
+	return parse(ev, strconv.ParseBool)
 }
 
 func (ev *Var) Bool() bool {
 	return mustParse(ev, (*Var).TryBool)
-}
-
-func (ev *Var) TryBool() (bool, error) {
-	return parse(ev, strconv.ParseBool)
 }
 
 func (ev *Var) TryManyBool(opts ...manyOpt) ([]bool, error) {
@@ -213,13 +209,11 @@ func (genv *Genv) Present(key string) bool {
 	return result != ""
 }
 
-func parse[T any](ev *Var, parse func(string) (T, error)) (T, error) {
+func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
 	const errFmt = "invalid environment variable for %s ('%s'): %w"
 
-	var (
-		result T
-		err    error
-	)
+	var result T
+	var err error
 
 	if err = ev.validate(); err != nil {
 		return result, fmt.Errorf(errFmt, ev.key, ev.value, err)
@@ -232,22 +226,22 @@ func parse[T any](ev *Var, parse func(string) (T, error)) (T, error) {
 		return result, nil
 	}
 
-	result, err = parse(ev.value)
+	result, err = fn(ev.value)
 	if err != nil {
 		return result, fmt.Errorf(errFmt, ev.key, ev.value, err)
 	}
 	return result, nil
 }
 
-func mustParse[T any](ev *Var, parse func(*Var) (T, error)) T {
-	result, err := parse(ev)
+func mustParse[T any](ev *Var, fn func(*Var) (T, error)) T {
+	result, err := fn(ev)
 	if err != nil {
 		panic(err)
 	}
 	return result
 }
 
-func parseMany[T any](ev *Var, parse func(*Var) (T, error), opts ...manyOpt) ([]T, error) {
+func parseMany[T any](ev *Var, fn func(*Var) (T, error), opts ...manyOpt) ([]T, error) {
 	for _, opt := range opts {
 		opt(ev)
 	}
@@ -273,7 +267,7 @@ func parseMany[T any](ev *Var, parse func(*Var) (T, error), opts ...manyOpt) ([]
 
 	result := make([]T, len(vars))
 	for i, ev := range vars {
-		val, err := parse(&ev)
+		val, err := fn(&ev)
 		if err != nil {
 			return nil, fmt.Errorf("invalid environment variable for %s ('%s'): %w", ev.key, ev.value, err)
 		}

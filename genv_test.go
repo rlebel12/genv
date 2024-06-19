@@ -191,29 +191,6 @@ func TestEVarString(t *testing.T) {
 	}
 }
 
-func TestEVarTryString(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		value    string
-		expected string
-		err      bool
-	}{
-		{"Valid", "val", "val", false},
-		{"Invalid", "", "", true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := Var{key: "TEST_VAR", value: test.value}
-			actual, err := ev.TryString()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
-		})
-	}
-}
-
 func TestManyEvarString(t *testing.T) {
 	t.Run(("Valid"), func(t *testing.T) {
 		ev := &Var{key: "TEST_VAR", value: "val1,val2", splitKey: ","}
@@ -229,34 +206,6 @@ func TestManyEvarString(t *testing.T) {
 		ev := &Var{key: "TEST_VAR", value: "", optional: true}
 		assert.Empty(t, ev.ManyString())
 	})
-}
-
-func TestTryManyEvarString(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		value    string
-		optional bool
-		expected []string
-		err      bool
-	}{
-		{"Valid", "val1,val2", false, []string{"val1", "val2"}, false},
-		{"Empty", "", false, []string{}, true},
-		{"Optional", "", true, []string{}, false},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
-			if test.optional {
-				ev = ev.Optional()
-			}
-			actual, err := ev.TryManyString()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
-		})
-	}
 }
 
 func TestEVarBool(t *testing.T) {
