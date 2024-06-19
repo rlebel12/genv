@@ -1,10 +1,12 @@
 package genv
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewGenv(t *testing.T) {
@@ -24,79 +26,36 @@ func TestWithAllowDefault(t *testing.T) {
 	assert.True(t, genv.allowDefault(genv))
 }
 
-func TestConstructor(t *testing.T) {
+func TestNew(t *testing.T) {
 	for name, test := range map[string]struct {
-		fn func(ev *Genv, key string, opts ...envVarOpt) *Var
+		value         string
+		opts          []envVarOpt
+		expectedValue string
+		expectedFound bool
 	}{
-		"New": {(*Genv).Var},
+		"Defined":     {"val", nil, "val", true},
+		"Undefined":   {"", nil, "", false},
+		"WithOptions": {"val", []envVarOpt{func(e *Var) { e.value = "opts" }}, "opts", true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			fn := test.fn
-			for name, test := range map[string]struct {
-				value         string
-				opts          []envVarOpt
-				expectedValue string
-				expectedFound bool
-			}{
-				"Defined":     {"val", nil, "val", true},
-				"Undefined":   {"", nil, "", false},
-				"WithOptions": {"val", []envVarOpt{func(e *Var) { e.value = "opts" }}, "opts", true},
-			} {
-				t.Run(name, func(t *testing.T) {
-					const key = "TEST_VAR"
-					if test.value != "" {
-						t.Setenv(key, test.value)
-					}
-					genv := New()
-					actual := fn(genv, key, test.opts...)
-					expected := &Var{
-						key:      key,
-						value:    test.expectedValue,
-						found:    test.expectedFound,
-						splitKey: ",",
-						genv:     genv,
-					}
-					// We cannot test function equality
-					expected.allowDefault, actual.allowDefault = nil, nil
-					assert.Equal(t, *expected, *actual)
-				})
+			const key = "TEST_VAR"
+			if test.value != "" {
+				t.Setenv(key, test.value)
 			}
+			genv := New()
+			actual := genv.Var(key, test.opts...)
+			expected := &Var{
+				key:      key,
+				value:    test.expectedValue,
+				found:    test.expectedFound,
+				splitKey: ",",
+				genv:     genv,
+			}
+			// We cannot test function equality
+			expected.allowDefault, actual.allowDefault = nil, nil
+			assert.Equal(t, *expected, *actual)
 		})
 	}
-}
-
-func TestValidate(t *testing.T) {
-	t.Run("Required", func(t *testing.T) {
-		t.Run("Present", func(t *testing.T) {
-			t.Setenv("TEST_VAR", "val")
-			genv := New()
-			ev := genv.Var("TEST_VAR")
-			assert.Nil(t, ev.validate())
-		})
-
-		t.Run("Absent", func(t *testing.T) {
-			t.Setenv("TEST_VAR", "")
-			genv := New()
-			ev := genv.Var("TEST_VAR")
-			assert.Error(t, ev.validate())
-		})
-	})
-
-	t.Run("Optional", func(t *testing.T) {
-		t.Run("Present", func(t *testing.T) {
-			t.Setenv("TEST_VAR", "val")
-			genv := New()
-			ev := genv.Var("TEST_VAR").Optional()
-			assert.Nil(t, ev.validate())
-		})
-
-		t.Run("Absent", func(t *testing.T) {
-			t.Setenv("TEST_VAR", "")
-			genv := New()
-			ev := genv.Var("TEST_VAR").Optional()
-			assert.Nil(t, ev.validate())
-		})
-	})
 }
 
 func TestOptional(t *testing.T) {
@@ -203,7 +162,7 @@ func TestManyEvarString(t *testing.T) {
 	})
 
 	t.Run(("Empty"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "", optional: true}
+		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
 		assert.Empty(t, ev.ManyString())
 	})
 }
@@ -259,7 +218,7 @@ func TestManyEvarBool(t *testing.T) {
 	})
 
 	t.Run(("Empty"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "", optional: true}
+		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
 		assert.Empty(t, ev.ManyBool())
 	})
 }
@@ -528,7 +487,65 @@ func TestManyEvarURL(t *testing.T) {
 	})
 
 	t.Run(("Empty"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "", optional: true}
+		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
+		assert.Empty(t, ev.ManyURL())
+	})
+}
+
+func TestTryManyEvarURL(t *testing.T) {
+	for name, test := range map[string]struct {
+		value    string
+		optional bool
+		expected []string
+		err      bool
+	}{
+		"valid": {
+			"http://example.com:8080,http://example.com:8081",
+			false,
+			[]string{
+				"http://example.com:8080",
+				"http://example.com:8081"},
+			false,
+		},
+		"empty":    {"", false, nil, true},
+		"optional": {"", true, nil, false},
+		"invalid":  {"http://invalid url", false, nil, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ev := Var{key: "TEST_VAR", value: test.value, splitKey: ","}
+			if test.optional {
+				ev = *ev.Optional()
+			}
+			actual, err := ev.TryManyURL()
+			if test.err {
+				assert.Error(t, err)
+				return
+			}
+			require.Nil(t, err)
+			if test.expected == nil {
+				assert.Equal(t, []*url.URL{}, actual)
+				return
+			}
+			for i, url := range actual {
+				assert.Equal(t, test.expected[i], url.String())
+			}
+		})
+	}
+
+	t.Run(("Valid"), func(t *testing.T) {
+		ev := &Var{key: "TEST_VAR", value: "http://example.com:8080,http://example.com:8081", splitKey: ","}
+		urls := ev.ManyURL()
+		assert.Equal(t, "http://example.com:8080", urls[0].String())
+		assert.Equal(t, "http://example.com:8081", urls[1].String())
+	})
+
+	t.Run(("Invalid"), func(t *testing.T) {
+		ev := &Var{key: "TEST_VAR", value: "http://invalid url", splitKey: ","}
+		assert.Panics(t, func() { ev.ManyURL() })
+	})
+
+	t.Run(("Empty"), func(t *testing.T) {
+		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
 		assert.Empty(t, ev.ManyURL())
 	})
 }

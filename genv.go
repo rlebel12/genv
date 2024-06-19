@@ -216,8 +216,8 @@ func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
 	var result T
 	var err error
 
-	if err = ev.validate(); err != nil {
-		return result, fmt.Errorf(errFmt, ev.key, err)
+	if !ev.optional && ev.value == "" {
+		return result, fmt.Errorf(errFmt, ev.key, ErrRequiredEnvironmentVariable)
 	}
 
 	if ev.value == "" {
@@ -247,6 +247,10 @@ var ErrRequiredEnvironmentVariable = errors.New("environment variable is empty o
 func parseMany[T any](ev *Var, fn func(*Var) (T, error), opts ...manyOpt) ([]T, error) {
 	for _, opt := range opts {
 		opt(ev)
+	}
+
+	if ev.splitKey == "" {
+		return nil, errors.New("split key cannot be empty")
 	}
 
 	split := strings.Split(ev.value, ev.splitKey)
@@ -288,12 +292,5 @@ func mustParseMany[T any](ev *Var, parse func(*Var) (T, error), opts ...manyOpt)
 }
 
 type envVarOpt func(*Var)
-
-func (ev *Var) validate() error {
-	if !ev.optional && ev.value == "" {
-		return ErrRequiredEnvironmentVariable
-	}
-	return nil
-}
 
 type genvOpt func(*Genv)
