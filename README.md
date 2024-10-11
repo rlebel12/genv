@@ -33,6 +33,11 @@ If the value from an environment variable cannot be parsed into the specified ty
 myVar, err := genv.Var("MY_VAR").TryString()
 ```
 
+#### A Note on Panics
+The decision to panic by default may be off-putting at first. The spirit of `genv` is that the library should be used to quickly populate variables from the environment at the beginning of the program. It should be one of the first, if not *the* first, actions to take place upon starting the program. If `genv` panics, it means that the environment running the program has been misconfigured. In this situation, the default expectation is that the program should not be allowed to run while in an incorrect state. There should be no situation where this library panics because it is impossible to use in a way that accommodates the given environment variables.
+
+If this is not the desired behavior, or if you wish to use `genv` far away from program startup, the `Try*` functions should be used instead. 
+
 ### Optional Variables
 By default, the package will fail if an environment variable is absent (either because the environment variable is not defined, or because it was set to an empty string). However, it is possible to specify that a variable is optional to prevent the panic behavior:
 
