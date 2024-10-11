@@ -218,9 +218,10 @@ func (genv *Genv) Present(key string) bool {
 const errFmtInvalidVar = "%s is invalid: %w"
 
 func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
-
-	var result T
-	var err error
+	var (
+		result T
+		err    error
+	)
 
 	if !ev.optional && ev.value == "" {
 		return result, fmt.Errorf(errFmtInvalidVar, ev.key, ErrRequiredEnvironmentVariable)
