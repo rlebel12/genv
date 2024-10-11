@@ -118,17 +118,21 @@ func (genv *Genv) WithSplitKey(splitKey string) manyOpt {
 }
 
 func (ev *Var) String() string {
-	return mustParse(ev, (*Var).parseString)
+	return mustParse(ev, (*Var).TryString)
 }
 
-func (ev *Var) ManyString(opts ...manyOpt) []string {
-	return mustParseMany(ev, (*Var).parseString, opts...)
-}
-
-func (ev *Var) parseString() (string, error) {
+func (ev *Var) TryString() (string, error) {
 	return parse(ev, func(value string) (string, error) {
 		return value, nil
 	})
+}
+
+func (ev *Var) ManyString(opts ...manyOpt) []string {
+	return mustParseMany(ev, (*Var).TryString, opts...)
+}
+
+func (ev *Var) TryManyString(opts ...manyOpt) ([]string, error) {
+	return parseMany(ev, (*Var).TryString, opts...)
 }
 
 func (ev *Var) TryBool() (bool, error) {
