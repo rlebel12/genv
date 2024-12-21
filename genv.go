@@ -11,18 +11,25 @@ import (
 
 type (
 	Genv struct {
-		allowDefault func(*Genv) bool
+		allowDefault allowFunc
 		splitKey     string
+		varFuncs     []func() error
 	}
+
+	allowFunc func(*Genv) (bool, error)
 )
 
 func New(opts ...genvOpt) *Genv {
 	genv := &Genv{
-		allowDefault: func(genv *Genv) bool {
-			return genv.
-				Var("GENV_ALLOW_DEFAULT").
+		allowDefault: func(genv *Genv) (bool, error) {
+			genv = genv.Clone()
+			allow := genv.Var("GENV_ALLOW_DEFAULT").
 				Default("false", genv.WithAllowDefaultAlways()).
 				Bool()
+			if err := genv.Parse(); err != nil {
+				return false, fmt.Errorf("parse GENV_ALLOW_DEFAULT: %w", err)
+			}
+			return *allow, nil
 		},
 		splitKey: ",",
 	}
@@ -39,7 +46,7 @@ func WithSplitKey(splitKey string) genvOpt {
 	}
 }
 
-func WithAllowDefault(allowFn func(*Genv) bool) genvOpt {
+func WithAllowDefault(allowFn allowFunc) genvOpt {
 	return func(genv *Genv) {
 		genv.allowDefault = allowFn
 	}
@@ -61,15 +68,33 @@ func (genv *Genv) Var(key string, opts ...envVarOpt) *Var {
 	return ev
 }
 
-func (genv *Genv) WithAllowDefault(allow func(genv *Genv) bool) defaultOpt {
+func (genv *Genv) Parse() (err error) {
+	defer func() { genv.varFuncs = nil }()
+	for _, f := range genv.varFuncs {
+		if err = f(); err != nil {
+			return
+		}
+	}
+	return
+}
+
+func (genv *Genv) Clone() *Genv {
+	clone := New(
+		WithAllowDefault(genv.allowDefault),
+		WithSplitKey(genv.splitKey),
+	)
+	return clone
+}
+
+func (genv *Genv) WithAllowDefault(allow func(genv *Genv) (bool, error)) fallbackOpt {
 	return func(f *fallback) {
 		f.allow = allow
 	}
 }
 
-func (genv *Genv) WithAllowDefaultAlways() defaultOpt {
-	return genv.WithAllowDefault(func(*Genv) bool {
-		return true
+func (genv *Genv) WithAllowDefaultAlways() fallbackOpt {
+	return genv.WithAllowDefault(func(*Genv) (bool, error) {
+		return true, nil
 	})
 }
 
@@ -78,16 +103,18 @@ type Var struct {
 	value        string
 	found        bool
 	optional     bool
-	allowDefault func(*Genv) bool
+	allowDefault allowFunc
 	splitKey     string
 	genv         *Genv
+	fb           *fallback
 }
 
 type fallback struct {
-	allow func(*Genv) bool
+	allow allowFunc
+	value string
 }
 
-type defaultOpt func(*fallback)
+type fallbackOpt func(*fallback)
 
 func (ev *Var) Optional() *Var {
 	ev.optional = true
@@ -95,17 +122,16 @@ func (ev *Var) Optional() *Var {
 }
 
 // Sets the default value for the environment variable if not present
-func (ev *Var) Default(value string, opts ...defaultOpt) *Var {
+func (ev *Var) Default(value string, opts ...fallbackOpt) *Var {
 	fb := new(fallback)
 	fb.allow = ev.allowDefault
+	fb.value = value
 
 	for _, opt := range opts {
 		opt(fb)
 	}
 
-	if !ev.found && fb.allow != nil && fb.allow(ev.genv) {
-		ev.value = value
-	}
+	ev.fb = fb
 	return ev
 }
 
@@ -117,102 +143,187 @@ func (genv *Genv) WithSplitKey(splitKey string) manyOpt {
 	}
 }
 
-func (ev *Var) String() string {
-	return mustParse(ev, (*Var).TryString)
+func (v *Var) StringVar(s *string) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseString(s) })
 }
 
-func (ev *Var) TryString() (string, error) {
-	return parse(ev, func(value string) (string, error) {
+func (v *Var) String() *string {
+	s := new(string)
+	v.StringVar(s)
+	return s
+}
+
+func (v *Var) ManyStringVar(s *[]string, opts ...manyOpt) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+		return parseMany(v, s, func(ev *Var, result *string) error {
+			return ev.parseString(result)
+		}, opts...)
+	})
+}
+
+func (v *Var) ManyString(opts ...manyOpt) *[]string {
+	s := new([]string)
+	v.ManyStringVar(s, opts...)
+	return s
+}
+
+func (v *Var) parseString(s *string) (err error) {
+	*s, err = parse(v, func(value string) (string, error) {
 		return value, nil
 	})
+	if err != nil {
+		err = fmt.Errorf("parse string: %w", err)
+	}
+	return
 }
 
-func (ev *Var) ManyString(opts ...manyOpt) []string {
-	return mustParseMany(ev, (*Var).TryString, opts...)
+func (v *Var) BoolVar(b *bool) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseBool(b) })
 }
 
-func (ev *Var) TryManyString(opts ...manyOpt) ([]string, error) {
-	return parseMany(ev, (*Var).TryString, opts...)
+func (v *Var) Bool() *bool {
+	b := new(bool)
+	v.BoolVar(b)
+	return b
 }
 
-func (ev *Var) TryBool() (bool, error) {
-	return parse(ev, strconv.ParseBool)
-}
-
-func (ev *Var) Bool() bool {
-	return mustParse(ev, (*Var).TryBool)
-}
-
-func (ev *Var) TryManyBool(opts ...manyOpt) ([]bool, error) {
-	return parseMany(ev, (*Var).TryBool, opts...)
-}
-
-func (ev *Var) ManyBool(opts ...manyOpt) []bool {
-	return mustParseMany(ev, (*Var).TryBool, opts...)
-}
-
-func (ev *Var) Int() int {
-	return mustParse(ev, (*Var).TryInt)
-}
-
-func (ev *Var) TryInt() (int, error) {
-	return parse(ev, strconv.Atoi)
-}
-
-func (ev *Var) TryManyInt(opts ...manyOpt) ([]int, error) {
-	return parseMany(ev, (*Var).TryInt, opts...)
-}
-
-func (ev *Var) ManyInt(opts ...manyOpt) []int {
-	return mustParseMany(ev, (*Var).TryInt, opts...)
-}
-
-func (ev *Var) Float64() float64 {
-	return mustParse(ev, (*Var).TryFloat64)
-}
-
-func (ev *Var) TryFloat64() (float64, error) {
-	return parse(ev, func(value string) (float64, error) {
-		return strconv.ParseFloat(value, 64)
+func (v *Var) ManyBoolVar(b *[]bool, opts ...manyOpt) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+		return parseMany(v, b, func(ev *Var, result *bool) error {
+			return ev.parseBool(result)
+		}, opts...)
 	})
 }
 
-func (ev *Var) TryManyFloat64(opts ...manyOpt) ([]float64, error) {
-	return parseMany(ev, (*Var).TryFloat64, opts...)
+func (v *Var) ManyBool(opts ...manyOpt) *[]bool {
+	b := new([]bool)
+	v.ManyBoolVar(b, opts...)
+	return b
 }
 
-func (ev *Var) ManyFloat64(opts ...manyOpt) []float64 {
-	return mustParseMany(ev, (*Var).TryFloat64, opts...)
+func (v *Var) parseBool(b *bool) (err error) {
+	*b, err = parse(v, strconv.ParseBool)
+	if err != nil {
+		err = fmt.Errorf("parse bool: %w", err)
+	}
+	return
 }
 
-// Returns the value of the environment variable as a URL.
-// Panics if the value is not a valid URL, but this may happen
-// if a scheme is not specified. See the documentation for
-// url.Parse for more information.
-func (ev *Var) URL() *url.URL {
-	return mustParse(ev, (*Var).TryURL)
+func (v *Var) IntVar(i *int) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseInt(i) })
 }
 
-// Returns the value of the environment variable as a URL.
-// Fails if the value is not a valid URL, but this may happen
-// if a scheme is not specified. See the documentation for
-// url.Parse for more information.
-func (ev *Var) TryURL() (*url.URL, error) {
-	return parse(ev, url.Parse)
+func (v *Var) Int() *int {
+	i := new(int)
+	v.IntVar(i)
+	return i
 }
 
-func (ev *Var) TryManyURL(opts ...manyOpt) ([]*url.URL, error) {
-	return parseMany(ev, (*Var).TryURL, opts...)
+func (v *Var) ManyIntVar(i *[]int, opts ...manyOpt) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+		return parseMany(v, i, func(ev *Var, result *int) error {
+			return ev.parseInt(result)
+		}, opts...)
+	})
 }
 
-func (ev *Var) ManyURL(opts ...manyOpt) []*url.URL {
-	return mustParseMany(ev, (*Var).TryURL, opts...)
+func (v *Var) ManyInt(opts ...manyOpt) *[]int {
+	i := new([]int)
+	v.ManyIntVar(i, opts...)
+	return i
 }
 
-// Returns true if the environment variable with the given key is set and non-empty
-func (genv *Genv) Present(key string) bool {
-	result := genv.Var(key).Optional().String()
-	return result != ""
+func (v *Var) parseInt(i *int) (err error) {
+	*i, err = parse(v, strconv.Atoi)
+	if err != nil {
+		err = fmt.Errorf("parse int: %w", err)
+	}
+	return
+}
+
+func (v *Var) Float64Var(f *float64) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseFloat(f) })
+}
+
+func (v *Var) Float64() *float64 {
+	f := new(float64)
+	v.Float64Var(f)
+	return f
+}
+
+func (v *Var) ManyFloat64Var(f *[]float64, opts ...manyOpt) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+		return parseMany(v, f, func(ev *Var, result *float64) error {
+			return ev.parseFloat(result)
+		}, opts...)
+	})
+}
+
+func (v *Var) ManyFloat64(opts ...manyOpt) *[]float64 {
+	f := new([]float64)
+	v.ManyFloat64Var(f, opts...)
+	return f
+}
+
+func (v *Var) parseFloat(f *float64) (err error) {
+	*f, err = parse(v, func(s string) (float64, error) {
+		return strconv.ParseFloat(s, 64)
+	})
+	if err != nil {
+		err = fmt.Errorf("parse float64: %w", err)
+	}
+	return
+}
+
+func (v *Var) URLVar(u *url.URL) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseURL(u) })
+}
+
+func (v *Var) URL() *url.URL {
+	u := new(url.URL)
+	v.URLVar(u)
+	return u
+}
+
+func (v *Var) ManyURLVar(u *[]url.URL, opts ...manyOpt) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+		return parseMany(v, u, func(ev *Var, result *url.URL) error {
+			return ev.parseURL(result)
+		}, opts...)
+	})
+}
+
+func (v *Var) ManyURL(opts ...manyOpt) *[]url.URL {
+	u := new([]url.URL)
+	v.ManyURLVar(u, opts...)
+	return u
+}
+
+func (v *Var) parseURL(u *url.URL) (err error) {
+	*u, err = parse(v, func(s string) (url.URL, error) {
+		result, err := url.Parse(s)
+		if err != nil {
+			return url.URL{}, err
+		}
+		return *result, nil
+	})
+	if err != nil {
+		return fmt.Errorf("parse url: %w", err)
+	}
+	return nil
+}
+
+func (v *Var) parseValue() (string, error) {
+	if v.value == "" && v.fb != nil && v.fb.allow != nil {
+		allow, err := v.fb.allow(v.genv)
+		if err != nil {
+			return "", fmt.Errorf(errFmtInvalidVar, v.key, err)
+		}
+		if allow {
+			return v.fb.value, nil
+		}
+	}
+	return v.value, nil
 }
 
 const errFmtInvalidVar = "%s is invalid: %w"
@@ -223,44 +334,46 @@ func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
 		err    error
 	)
 
-	if !ev.optional && ev.value == "" {
+	value, err := ev.parseValue()
+	if err != nil {
+		return result, fmt.Errorf(errFmtInvalidVar, ev.key, err)
+	}
+
+	if !ev.optional && value == "" {
 		return result, fmt.Errorf(errFmtInvalidVar, ev.key, ErrRequiredEnvironmentVariable)
 	}
 
-	if ev.value == "" {
+	if value == "" {
 		// If validation succeeded, then the value being empty means it was
 		// optional (or just an empty string is the desired output).
 		// In that case, use the zero value.
 		return result, nil
 	}
 
-	result, err = fn(ev.value)
+	result, err = fn(value)
 	if err != nil {
 		return result, fmt.Errorf(errFmtInvalidVar, ev.key, err)
 	}
 	return result, nil
 }
 
-func mustParse[T any](ev *Var, fn func(*Var) (T, error)) T {
-	result, err := fn(ev)
-	if err != nil {
-		panic(err)
-	}
-	return result
-}
-
 var ErrRequiredEnvironmentVariable = errors.New("environment variable is empty or unset")
 
-func parseMany[T any](ev *Var, fn func(*Var) (T, error), opts ...manyOpt) ([]T, error) {
+func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...manyOpt) error {
 	for _, opt := range opts {
 		opt(ev)
 	}
 
 	if ev.splitKey == "" {
-		return nil, errors.New("split key cannot be empty")
+		return errors.New("split key cannot be empty")
 	}
 
-	split := strings.Split(ev.value, ev.splitKey)
+	value, err := ev.parseValue()
+	if err != nil {
+		return fmt.Errorf(errFmtInvalidVar, ev.key, err)
+	}
+
+	split := strings.Split(value, ev.splitKey)
 	vars := make([]Var, 0, len(split))
 	for _, val := range split {
 		if val == "" {
@@ -276,26 +389,18 @@ func parseMany[T any](ev *Var, fn func(*Var) (T, error), opts ...manyOpt) ([]T, 
 		})
 	}
 	if !ev.optional && len(vars) == 0 {
-		return nil, fmt.Errorf(errFmtInvalidVar, ev.key, ErrRequiredEnvironmentVariable)
+		return fmt.Errorf(errFmtInvalidVar, ev.key, ErrRequiredEnvironmentVariable)
 	}
 
-	result := make([]T, len(vars))
-	for i, ev := range vars {
-		val, err := fn(&ev)
+	for _, ev := range vars {
+		v := new(T)
+		err := fn(&ev, v)
 		if err != nil {
-			return nil, fmt.Errorf(errFmtInvalidVar, ev.key, err)
+			return fmt.Errorf(errFmtInvalidVar, ev.key, err)
 		}
-		result[i] = val
+		*result = append(*result, *v)
 	}
-	return result, nil
-}
-
-func mustParseMany[T any](ev *Var, parse func(*Var) (T, error), opts ...manyOpt) []T {
-	result, err := parseMany(ev, parse, opts...)
-	if err != nil {
-		panic(err)
-	}
-	return result
+	return nil
 }
 
 type envVarOpt func(*Var)

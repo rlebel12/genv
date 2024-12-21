@@ -1,18 +1,18 @@
 package genv
 
 import (
-	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewGenv(t *testing.T) {
 	genv := New()
 	assert.NotNil(t, genv)
-	assert.False(t, genv.allowDefault(genv))
+	gotAllow, gotErr := genv.allowDefault(genv)
+	assert.NoError(t, gotErr)
+	assert.False(t, gotAllow)
 	assert.Equal(t, ",", genv.splitKey)
 }
 
@@ -22,8 +22,10 @@ func TestWithDefaultSplitKey(t *testing.T) {
 }
 
 func TestWithAllowDefault(t *testing.T) {
-	genv := New(WithAllowDefault(func(*Genv) bool { return true }))
-	assert.True(t, genv.allowDefault(genv))
+	genv := New(WithAllowDefault(func(*Genv) (bool, error) { return true, nil }))
+	gotAllow, gotErr := genv.allowDefault(genv)
+	assert.NoError(t, gotErr)
+	assert.True(t, gotAllow)
 }
 
 func TestNew(t *testing.T) {
@@ -77,7 +79,9 @@ func TestWithSplitKey(t *testing.T) {
 	actual := genv.Var("TEST_VAR").
 		Default("123;456", genv.WithAllowDefaultAlways()).
 		ManyInt(genv.WithSplitKey(";"))
-	assert.Equal(t, []int{123, 456}, actual)
+	err := genv.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, []int{123, 456}, *actual)
 }
 
 type MockDefaultOpt struct {
@@ -89,22 +93,23 @@ func (m *MockDefaultOpt) optFunc() {
 }
 
 func TestDefault(t *testing.T) {
-	allow := func(*Genv) bool { return true }
-	disallow := func(*Genv) bool { return false }
+	allow := func(*Genv) (bool, error) { return true, nil }
+	disallow := func(*Genv) (bool, error) { return false, nil }
 	for name, test := range map[string]struct {
 		found         bool
-		opts          []func(*Genv) bool
+		opts          []allowFunc
 		expectedValue string
+		wantErr       error
 	}{
-		"Found":              {true, nil, "val"},
-		"FoundAllowed":       {true, []func(*Genv) bool{allow}, "val"},
-		"FoundDisallowed":    {true, []func(*Genv) bool{disallow}, "val"},
-		"NotFound":           {false, nil, "default"},
-		"NotFoundAllowed":    {false, []func(*Genv) bool{allow}, "default"},
-		"NotFoundDisallowed": {false, []func(*Genv) bool{disallow}, ""},
+		"Found":              {true, nil, "val", nil},
+		"FoundAllowed":       {true, []allowFunc{allow}, "val", nil},
+		"FoundDisallowed":    {true, []allowFunc{disallow}, "val", nil},
+		"NotFound":           {false, nil, "default", nil},
+		"NotFoundAllowed":    {false, []allowFunc{allow}, "default", nil},
+		"NotFoundDisallowed": {false, []allowFunc{disallow}, "", ErrRequiredEnvironmentVariable},
 	} {
 		t.Run(name, func(t *testing.T) {
-			genv := New(WithAllowDefault(func(*Genv) bool { return true }))
+			genv := New(WithAllowDefault(func(*Genv) (bool, error) { return true, nil }))
 
 			if test.found {
 				t.Setenv("TEST_VAR", "val")
@@ -112,516 +117,244 @@ func TestDefault(t *testing.T) {
 
 			customOpt := new(MockDefaultOpt)
 			customOpt.On("optFunc")
-			opts := []defaultOpt{func(fb *fallback) { customOpt.optFunc() }}
-			fallbackOpts := make([]defaultOpt, len(test.opts))
+			opts := []fallbackOpt{func(fb *fallback) { customOpt.optFunc() }}
+			fallbackOpts := make([]fallbackOpt, len(test.opts))
 			for i, opt := range test.opts {
 				fallbackOpts[i] = genv.WithAllowDefault(opt)
 			}
 			opts = append(opts, fallbackOpts...)
-			actual := (*Var).Default(
-				genv.Var("TEST_VAR"),
-				"default",
-				opts...,
-			)
-			assert.Equal(t, test.expectedValue, actual.value)
+
+			actual := genv.Var("TEST_VAR").Default("default", opts...).String()
+			err := genv.Parse()
+			if test.wantErr != nil {
+				assert.ErrorIs(t, err, test.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, test.expectedValue, *actual)
 			customOpt.AssertExpectations(t)
 		})
 	}
 }
 
-func TestEVarString(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		value    string
-		expected string
-		panics   bool
+func TestString(t *testing.T) {
+	for name, test := range map[string]struct {
+		giveValue string
+		wantValue string
+		wantErr   bool
 	}{
-		{"Valid", "val", "val", false},
-		{"Invalid", "", "", true},
+		"Valid":   {"val", "val", false},
+		"Invalid": {"", "", true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := Var{key: "TEST_VAR", value: test.value}
-			if test.panics {
-				assert.Panics(t, func() { _ = ev.String() })
-			} else {
-				assert.Equal(t, test.expected, ev.String())
-			}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TEST_VAR", test.giveValue)
+			env := New()
+			got := env.Var("TEST_VAR").String()
+			gotErr := env.Parse()
+			assert.Equal(t, test.wantValue, *got)
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func TestEVarTryString(t *testing.T) {
-	for _, test := range []struct {
-		name     string
+func TestManyString(t *testing.T) {
+	for name, test := range map[string]struct {
 		value    string
-		expected string
-		err      bool
-	}{
-		{"Valid", "val", "val", false},
-		{"Invalid", "", "", true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := Var{key: "TEST_VAR", value: test.value}
-			actual, err := ev.TryString()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
-		})
-	}
-}
-
-func TestManyEvarString(t *testing.T) {
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "val1,val2", splitKey: ","}
-		assert.Equal(t, []string{"val1", "val2"}, ev.ManyString())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: ""}
-		assert.Panics(t, func() { ev.ManyString() })
-	})
-
-	t.Run(("Empty"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
-		assert.Empty(t, ev.ManyString())
-	})
-}
-
-func TestTryManyEvarString(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		value    string
-		optional bool
+		splitKey string
 		expected []string
-		err      bool
+		wantErr  bool
 	}{
-		{"Valid", "val1,val2", false, []string{"val1", "val2"}, false},
-		{"Empty", "", false, []string{}, true},
-		{"Optional", "", true, []string{}, false},
+		"Valid":   {"foo,bar,baz", ",", []string{"foo", "bar", "baz"}, false},
+		"Invalid": {"", ",", nil, true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
-			if test.optional {
-				ev = ev.Optional()
-			}
-			actual, err := ev.TryManyString()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").ManyString()
+			gotErr := env.Parse()
+			assert.Equal(t, test.expected, *got)
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func TestEVarBool(t *testing.T) {
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := Var{key: "TEST_VAR", value: "true"}
-		assert.True(t, ev.Bool())
-		ev.value = "false"
-		assert.False(t, ev.Bool())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := Var{key: "TEST_VAR", value: "invalid"}
-		assert.Panics(t, func() { ev.Bool() })
-	})
-}
-
-func TestEVarTryBool(t *testing.T) {
-	for _, test := range []struct {
-		name     string
+func TestBool(t *testing.T) {
+	for name, test := range map[string]struct {
 		value    string
 		expected bool
-		err      bool
+		wantErr  bool
 	}{
-		{"ValidTrue", "true", true, false},
-		{"ValidFalse", "false", false, false},
-		{"Missing", "", false, true},
-		{"Invalid", "invalid", false, true},
+		"ValidTrue":  {"true", true, false},
+		"ValidFalse": {"false", false, false},
+		"Invalid":    {"", false, true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := Var{key: "TEST_VAR", value: test.value}
-			actual, err := ev.TryBool()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").Bool()
+			gotErr := env.Parse()
+			assert.Equal(t, test.expected, *got)
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func TestManyEvarBool(t *testing.T) {
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "true,false", splitKey: ","}
-		assert.Equal(t, []bool{true, false}, ev.ManyBool())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "invalid"}
-		assert.Panics(t, func() { ev.ManyBool() })
-	})
-
-	t.Run(("Empty"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
-		assert.Empty(t, ev.ManyBool())
-	})
-}
-
-func TestTryManyEvarBool(t *testing.T) {
-	for _, test := range []struct {
-		name     string
+func TestManyBool(t *testing.T) {
+	for name, test := range map[string]struct {
 		value    string
-		optional bool
+		splitKey string
 		expected []bool
-		err      bool
+		wantErr  bool
 	}{
-		{"Valid", "true,false", false, []bool{true, false}, false},
-		{"Empty", "", false, []bool{}, true},
-		{"Optional", "", true, []bool{}, false},
-		{"Invalid", "invalid", false, []bool{}, true},
+		"Valid":   {"true,false", ",", []bool{true, false}, false},
+		"Invalid": {"", ",", nil, true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
-			if test.optional {
-				ev = ev.Optional()
-			}
-			actual, err := ev.TryManyBool()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").ManyBool()
+			gotErr := env.Parse()
+			assert.Equal(t, test.expected, *got)
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func TestEvarInt(t *testing.T) {
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := Var{key: "TEST_VAR", value: "123"}
-		assert.Equal(t, 123, ev.Int())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := Var{key: "TEST_VAR", value: "invalid"}
-		assert.Panics(t, func() { ev.Int() })
-	})
-}
-
-func TestEvarTryInt(t *testing.T) {
-	for _, test := range []struct {
-		name     string
+func TestInt(t *testing.T) {
+	for name, test := range map[string]struct {
 		value    string
-		optional bool
 		expected int
-		err      bool
+		wantErr  bool
 	}{
-		{"Valid", "123", false, 123, false},
-		{"Empty", "", false, 0, true},
-		{"Optional", "", true, 0, false},
-		{"Invalid", "invalid", false, 0, true},
+		"Valid":   {"123", 123, false},
+		"Invalid": {"", 0, true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := Var{key: "TEST_VAR", value: test.value}
-			if test.optional {
-				ev = *ev.Optional()
-			}
-			actual, err := ev.TryInt()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").Int()
+			gotErr := env.Parse()
+			assert.Equal(t, test.expected, *got)
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func TestManyEvarInt(t *testing.T) {
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "123,456", splitKey: ","}
-		assert.Equal(t, []int{123, 456}, ev.ManyInt())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "invalid", splitKey: ","}
-		assert.Panics(t, func() { ev.ManyInt() })
-	})
-
-	t.Run(("Empty"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
-		assert.Empty(t, ev.ManyInt())
-	})
-}
-
-func TestTryManyEvarInt(t *testing.T) {
+func TestManyInt(t *testing.T) {
 	for name, test := range map[string]struct {
 		value    string
-		optional bool
+		splitKey string
 		expected []int
-		err      bool
+		wantErr  bool
 	}{
-		"valid":    {"123,456", false, []int{123, 456}, false},
-		"empty":    {"", false, []int{}, true},
-		"optional": {"", true, []int{}, false},
-		"invalid":  {"invalid", false, []int{}, true},
+		"Valid":   {"123,456", ",", []int{123, 456}, false},
+		"Invalid": {"", ",", nil, true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
-			if test.optional {
-				ev = ev.Optional()
-			}
-			actual, err := ev.TryManyInt()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").ManyInt()
+			gotErr := env.Parse()
+			assert.Equal(t, test.expected, *got)
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func TestEvarFloat64(t *testing.T) {
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := Var{key: "TEST_VAR", value: "123.456"}
-		assert.Equal(t, 123.456, ev.Float64())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := Var{key: "TEST_VAR", value: "invalid"}
-		assert.Panics(t, func() { ev.Float64() })
-	})
-}
-
-func TestEvarTryFloat64(t *testing.T) {
+func TestFloat64(t *testing.T) {
 	for name, test := range map[string]struct {
 		value    string
-		optional bool
 		expected float64
-		err      bool
+		wantErr  bool
 	}{
-		"valid":    {"123.456", false, 123.456, false},
-		"empty":    {"", false, 0.0, true},
-		"optional": {"", true, 0.0, false},
-		"invalid":  {"invalid", false, 0.0, true},
+		"Valid":   {"123.456", 123.456, false},
+		"Invalid": {"", 0.0, true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ev := Var{key: "TEST_VAR", value: test.value}
-			if test.optional {
-				ev = *ev.Optional()
-			}
-			actual, err := ev.TryFloat64()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").Float64()
+			gotErr := env.Parse()
+			assert.Equal(t, test.expected, *got)
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func TestEvarManyFloat64(t *testing.T) {
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "123.456,456.789", splitKey: ","}
-		assert.Equal(t, []float64{123.456, 456.789}, ev.ManyFloat64())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "invalid", splitKey: ","}
-		assert.Panics(t, func() { ev.ManyFloat64() })
-	})
-
-	t.Run(("Empty"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
-		assert.Empty(t, ev.ManyFloat64())
-	})
-}
-
-func TestTryManyEvarFloat64(t *testing.T) {
-	for _, test := range []struct {
-		name     string
+func TestManyFloat64(t *testing.T) {
+	for name, test := range map[string]struct {
 		value    string
-		optional bool
+		splitKey string
 		expected []float64
-		err      bool
+		wantErr  bool
 	}{
-		{"Valid", "123.456,456.789", false, []float64{123.456, 456.789}, false},
-		{"Empty", "", false, []float64{}, true},
-		{"Optional", "", true, []float64{}, false},
-		{"Invalid", "invalid", false, []float64{}, true},
+		"Valid":   {"123.456,456.789", ",", []float64{123.456, 456.789}, false},
+		"Invalid": {"", ",", nil, true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := &Var{key: "TEST_VAR", value: test.value, splitKey: ","}
-			if test.optional {
-				ev = ev.Optional()
-			}
-			actual, err := ev.TryManyFloat64()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, test.expected, actual)
-			}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").ManyFloat64()
+			gotErr := env.Parse()
+			assert.Equal(t, test.expected, *got)
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func TestEvarURL(t *testing.T) {
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := Var{key: "TEST_VAR", value: "http://example.com:8080"}
-		url := ev.URL()
-		assert.Equal(t, "http", url.Scheme)
-		assert.Equal(t, "example.com", url.Hostname())
-		assert.Equal(t, "8080", url.Port())
-		assert.Equal(t, "http://example.com:8080", ev.URL().String())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := Var{key: "TEST_VAR", value: "http://invalid url"}
-		assert.Panics(t, func() { ev.URL() })
-	})
-}
-
-func TestEvarTryURL(t *testing.T) {
-	for _, test := range []struct {
-		name     string
+func TestURL(t *testing.T) {
+	for name, test := range map[string]struct {
 		value    string
-		optional bool
 		expected string
-		err      bool
+		wantErr  bool
 	}{
-		{"Valid", "http://example.com:8080", false, "http://example.com:8080", false},
-		{"Empty", "", false, "", true},
-		{"Optional", "", true, "", false},
-		{"Invalid", "http://invalid url", false, "", true},
+		"Valid":   {"http://example.com:8080", "http://example.com:8080", false},
+		"Invalid": {"http://invalid url", "", true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			ev := Var{key: "TEST_VAR", value: test.value}
-			if test.optional {
-				ev = *ev.Optional()
-			}
-			actual, err := ev.TryURL()
-			if test.err {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-				if test.expected == "" {
-					assert.Nil(t, actual)
-				} else {
-					assert.Equal(t, test.expected, actual.String())
-				}
-			}
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").URL()
+			gotErr := env.Parse()
+			assert.Equal(t, test.expected, got.String())
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func TestManyEvarURL(t *testing.T) {
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "http://example.com:8080,http://example.com:8081", splitKey: ","}
-		urls := ev.ManyURL()
-		assert.Equal(t, "http://example.com:8080", urls[0].String())
-		assert.Equal(t, "http://example.com:8081", urls[1].String())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "http://invalid url", splitKey: ","}
-		assert.Panics(t, func() { ev.ManyURL() })
-	})
-
-	t.Run(("Empty"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
-		assert.Empty(t, ev.ManyURL())
-	})
-}
-
-func TestTryManyEvarURL(t *testing.T) {
+func TestManyURL(t *testing.T) {
 	for name, test := range map[string]struct {
 		value    string
-		optional bool
+		splitKey string
 		expected []string
-		err      bool
+		wantErr  bool
 	}{
-		"valid": {
-			"http://example.com:8080,http://example.com:8081",
-			false,
-			[]string{
-				"http://example.com:8080",
-				"http://example.com:8081"},
-			false,
-		},
-		"empty":    {"", false, nil, true},
-		"optional": {"", true, nil, false},
-		"invalid":  {"http://invalid url", false, nil, true},
+		"Valid":   {"http://example.com:8080,http://example.com:8081", ",", []string{"http://example.com:8080", "http://example.com:8081"}, false},
+		"Invalid": {"http://invalid url", ",", nil, true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ev := Var{key: "TEST_VAR", value: test.value, splitKey: ","}
-			if test.optional {
-				ev = *ev.Optional()
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").ManyURL()
+			gotErr := env.Parse()
+			for i, want := range test.expected {
+				assert.Equal(t, want, (*got)[i].String())
 			}
-			actual, err := ev.TryManyURL()
-			if test.err {
-				assert.Error(t, err)
-				return
-			}
-			require.Nil(t, err)
-			if test.expected == nil {
-				assert.Equal(t, []*url.URL{}, actual)
-				return
-			}
-			for i, url := range actual {
-				assert.Equal(t, test.expected[i], url.String())
-			}
-		})
-	}
-
-	t.Run(("Valid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "http://example.com:8080,http://example.com:8081", splitKey: ","}
-		urls := ev.ManyURL()
-		assert.Equal(t, "http://example.com:8080", urls[0].String())
-		assert.Equal(t, "http://example.com:8081", urls[1].String())
-	})
-
-	t.Run(("Invalid"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "http://invalid url", splitKey: ","}
-		assert.Panics(t, func() { ev.ManyURL() })
-	})
-
-	t.Run(("Empty"), func(t *testing.T) {
-		ev := &Var{key: "TEST_VAR", value: "", optional: true, splitKey: ","}
-		assert.Empty(t, ev.ManyURL())
-	})
-}
-
-func TestPresent(t *testing.T) {
-	present := "present"
-	empty := ""
-	for name, test := range map[string]struct {
-		val      *string
-		expected bool
-	}{
-		"present": {&present, true},
-		"empty":   {&empty, false},
-		"absent":  {nil, false},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if test.val != nil {
-				t.Setenv("TEST_VAR", *test.val)
-			}
-			actual := newGenv().Present("TEST_VAR")
-			assert.Equal(t, test.expected, actual)
+			assert.Equal(t, test.wantErr, gotErr != nil)
 		})
 	}
 }
 
-func newGenv() *Genv {
-	return New(WithAllowDefault(func(*Genv) bool { return true }))
+func TestOptionalEmpty(t *testing.T) {
+	env := New()
+	got := env.Var("TEST_VAR").Optional().String()
+	assert.NoError(t, env.Parse())
+	assert.Equal(t, "", *got)
+}
+
+func TestParseManyNoSplitKey(t *testing.T) {
+	env := New()
+	got := env.Var("TEST_VAR").ManyInt(env.WithSplitKey(""))
+	assert.Error(t, env.Parse())
+	assert.Nil(t, *got)
 }
