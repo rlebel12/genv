@@ -3,6 +3,7 @@ package genv
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -339,6 +340,51 @@ func TestManyURL(t *testing.T) {
 			gotErr := env.Parse()
 			for i, want := range test.expected {
 				assert.Equal(t, want, (*got)[i].String())
+			}
+			assert.Equal(t, test.wantErr, gotErr != nil)
+		})
+	}
+}
+
+func TestUUID(t *testing.T) {
+	giveIDRaw := "123e4567-e89b-12d3-a456-426614174000"
+	for name, test := range map[string]struct {
+		value    string
+		expected uuid.UUID
+		wantErr  bool
+	}{
+		"Valid":   {giveIDRaw, uuid.MustParse(giveIDRaw), false},
+		"Invalid": {"invalid uuid", uuid.Nil, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").UUID()
+			gotErr := env.Parse()
+			assert.Equal(t, test.wantErr, gotErr != nil)
+			assert.Equal(t, test.expected, *got)
+		})
+	}
+}
+
+func TestManyUUID(t *testing.T) {
+	giveIDRaw := "123e4567-e89b-12d3-a456-426614174000"
+	for name, test := range map[string]struct {
+		value    string
+		splitKey string
+		expected []uuid.UUID
+		wantErr  bool
+	}{
+		"Valid":   {giveIDRaw + "," + giveIDRaw, ",", []uuid.UUID{uuid.MustParse(giveIDRaw), uuid.MustParse(giveIDRaw)}, false},
+		"Invalid": {"invalid uuid", ",", nil, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TEST_VAR", test.value)
+			env := New()
+			got := env.Var("TEST_VAR").ManyUUID()
+			gotErr := env.Parse()
+			for i, want := range test.expected {
+				assert.Equal(t, want, (*got)[i])
 			}
 			assert.Equal(t, test.wantErr, gotErr != nil)
 		})

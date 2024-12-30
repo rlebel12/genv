@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type (
@@ -309,6 +311,38 @@ func (v *Var) parseURL(u *url.URL) (err error) {
 	})
 	if err != nil {
 		return fmt.Errorf("parse url: %w", err)
+	}
+	return nil
+}
+
+func (v *Var) UUIDVar(id *uuid.UUID) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseUUID(id) })
+}
+
+func (v *Var) UUID() *uuid.UUID {
+	id := new(uuid.UUID)
+	v.UUIDVar(id)
+	return id
+}
+
+func (v *Var) ManyUUIDVar(id *[]uuid.UUID, opts ...manyOpt) {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+		return parseMany(v, id, func(ev *Var, result *uuid.UUID) error {
+			return ev.parseUUID(result)
+		}, opts...)
+	})
+}
+
+func (v *Var) ManyUUID(opts ...manyOpt) *[]uuid.UUID {
+	id := new([]uuid.UUID)
+	v.ManyUUIDVar(id, opts...)
+	return id
+}
+
+func (v *Var) parseUUID(id *uuid.UUID) (err error) {
+	*id, err = parse(v, uuid.Parse)
+	if err != nil {
+		return fmt.Errorf("parse uuid: %w", err)
 	}
 	return nil
 }
