@@ -44,22 +44,22 @@ func NewSettings() (Settings, error) {
 		genv.WithSplitKey(";"),
 	)
 
-	var settings Settings
+	var s Settings
 
-	env.Var("STRING_VAR").StringVar(&settings.StringVar)
-	env.Var("INT_VAR").IntVar(&settings.IntVar)
-	env.Var("BOOL_VAR").BoolVar(&settings.BoolVar)
+	env.Var("STRING_VAR").String(&s.StringVar)
+	env.Var("INT_VAR").Int(&s.IntVar)
+	env.Var("BOOL_VAR").Bool(&s.BoolVar)
 	env.Var("ALWAYS_DEFAULT_STRING_VAR").
-		Default("default value", env.WithAllowDefaultAlways()).
-		StringVar(&settings.AlwaysDefaultStringVar)
-	env.Var("OPTIONAL_FLOAT_VAR").Optional().Float64Var(&settings.OptionalFloatVar)
+		String(&s.AlwaysDefaultStringVar).
+		Default("default value", env.WithAllowDefaultAlways())
+	env.Var("OPTIONAL_FLOAT_VAR").Float64(&s.OptionalFloatVar).Optional()
 	env.Var("ADVANCED_URL_VAR").
 		Default("https://example.com",
 			env.WithAllowDefault(func(*genv.Genv) (bool, error) {
 				clone := env.Clone()
 				allow := clone.Var("ADVANCED_URL_VAR_ALLOW_DEFAULT").
 					Default("true", clone.WithAllowDefaultAlways()).
-					Bool()
+					NewBool()
 				if err := clone.Parse(); err != nil {
 					return false, fmt.Errorf("parse ADVANCED_URL_VAR_ALLOW_DEFAULT: %w", err)
 				}
@@ -67,14 +67,14 @@ func NewSettings() (Settings, error) {
 			}),
 		).
 		Optional().
-		URLVar(&settings.AdvancedURLVar)
+		URL(&s.AdvancedURLVar)
 	env.Var("MANY_INT_VAR").
 		Optional().
 		Default("123;456;", env.WithAllowDefaultAlways()).
-		ManyIntVar(&settings.ManyIntVar)
+		Ints(&s.ManyIntVar)
 
 	if err := env.Parse(); err != nil {
 		return Settings{}, fmt.Errorf("parse env: %w", err)
 	}
-	return settings, nil
+	return s, nil
 }

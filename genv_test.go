@@ -79,7 +79,7 @@ func TestWithSplitKey(t *testing.T) {
 	genv := New(WithSplitKey(","))
 	actual := genv.Var("TEST_VAR").
 		Default("123;456", genv.WithAllowDefaultAlways()).
-		ManyInt(genv.WithSplitKey(";"))
+		NewInts(genv.WithSplitKey(";"))
 	err := genv.Parse()
 	assert.NoError(t, err)
 	assert.Equal(t, []int{123, 456}, *actual)
@@ -125,7 +125,7 @@ func TestDefault(t *testing.T) {
 			}
 			opts = append(opts, fallbackOpts...)
 
-			actual := genv.Var("TEST_VAR").Default("default", opts...).String()
+			actual := genv.Var("TEST_VAR").Default("default", opts...).NewString()
 			err := genv.Parse()
 			if test.wantErr != nil {
 				assert.ErrorIs(t, err, test.wantErr)
@@ -150,7 +150,7 @@ func TestString(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.giveValue)
 			env := New()
-			got := env.Var("TEST_VAR").String()
+			got := env.Var("TEST_VAR").NewString()
 			gotErr := env.Parse()
 			assert.Equal(t, test.wantValue, *got)
 			assert.Equal(t, test.wantErr, gotErr != nil)
@@ -171,7 +171,7 @@ func TestManyString(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").ManyString()
+			got := env.Var("TEST_VAR").NewStrings()
 			gotErr := env.Parse()
 			assert.Equal(t, test.expected, *got)
 			assert.Equal(t, test.wantErr, gotErr != nil)
@@ -192,7 +192,7 @@ func TestBool(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").Bool()
+			got := env.Var("TEST_VAR").NewBool()
 			gotErr := env.Parse()
 			assert.Equal(t, test.expected, *got)
 			assert.Equal(t, test.wantErr, gotErr != nil)
@@ -213,7 +213,7 @@ func TestManyBool(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").ManyBool()
+			got := env.Var("TEST_VAR").NewBools()
 			gotErr := env.Parse()
 			assert.Equal(t, test.expected, *got)
 			assert.Equal(t, test.wantErr, gotErr != nil)
@@ -233,7 +233,7 @@ func TestInt(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").Int()
+			got := env.Var("TEST_VAR").NewInt()
 			gotErr := env.Parse()
 			assert.Equal(t, test.expected, *got)
 			assert.Equal(t, test.wantErr, gotErr != nil)
@@ -254,7 +254,7 @@ func TestManyInt(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").ManyInt()
+			got := env.Var("TEST_VAR").NewInts()
 			gotErr := env.Parse()
 			assert.Equal(t, test.expected, *got)
 			assert.Equal(t, test.wantErr, gotErr != nil)
@@ -274,7 +274,7 @@ func TestFloat64(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").Float64()
+			got := env.Var("TEST_VAR").NewFloat64()
 			gotErr := env.Parse()
 			assert.Equal(t, test.expected, *got)
 			assert.Equal(t, test.wantErr, gotErr != nil)
@@ -295,7 +295,7 @@ func TestManyFloat64(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").ManyFloat64()
+			got := env.Var("TEST_VAR").NewFloat64s()
 			gotErr := env.Parse()
 			assert.Equal(t, test.expected, *got)
 			assert.Equal(t, test.wantErr, gotErr != nil)
@@ -315,7 +315,7 @@ func TestURL(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").URL()
+			got := env.Var("TEST_VAR").NewURL()
 			gotErr := env.Parse()
 			assert.Equal(t, test.expected, got.String())
 			assert.Equal(t, test.wantErr, gotErr != nil)
@@ -336,7 +336,7 @@ func TestManyURL(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").ManyURL()
+			got := env.Var("TEST_VAR").NewURLs()
 			gotErr := env.Parse()
 			for i, want := range test.expected {
 				assert.Equal(t, want, (*got)[i].String())
@@ -359,7 +359,7 @@ func TestUUID(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").UUID()
+			got := env.Var("TEST_VAR").NewUUID()
 			gotErr := env.Parse()
 			assert.Equal(t, test.wantErr, gotErr != nil)
 			assert.Equal(t, test.expected, *got)
@@ -381,7 +381,7 @@ func TestManyUUID(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").ManyUUID()
+			got := env.Var("TEST_VAR").NewUUIDs()
 			gotErr := env.Parse()
 			for i, want := range test.expected {
 				assert.Equal(t, want, (*got)[i])
@@ -393,14 +393,14 @@ func TestManyUUID(t *testing.T) {
 
 func TestOptionalEmpty(t *testing.T) {
 	env := New()
-	got := env.Var("TEST_VAR").Optional().String()
+	got := env.Var("TEST_VAR").Optional().NewString()
 	assert.NoError(t, env.Parse())
 	assert.Equal(t, "", *got)
 }
 
 func TestParseManyNoSplitKey(t *testing.T) {
 	env := New()
-	got := env.Var("TEST_VAR").ManyInt(env.WithSplitKey(""))
+	got := env.Var("TEST_VAR").NewInts(env.WithSplitKey(""))
 	assert.Error(t, env.Parse())
 	assert.Nil(t, *got)
 }

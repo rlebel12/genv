@@ -27,7 +27,7 @@ func New(opts ...genvOpt) *Genv {
 			genv = genv.Clone()
 			allow := genv.Var("GENV_ALLOW_DEFAULT").
 				Default("false", genv.WithAllowDefaultAlways()).
-				Bool()
+				NewBool()
 			if err := genv.Parse(); err != nil {
 				return false, fmt.Errorf("parse GENV_ALLOW_DEFAULT: %w", err)
 			}
@@ -145,27 +145,29 @@ func (genv *Genv) WithSplitKey(splitKey string) manyOpt {
 	}
 }
 
-func (v *Var) StringVar(s *string) {
+func (v *Var) String(s *string) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseString(s) })
+	return v
 }
 
-func (v *Var) String() *string {
+func (v *Var) NewString() *string {
 	s := new(string)
-	v.StringVar(s)
+	v.String(s)
 	return s
 }
 
-func (v *Var) ManyStringVar(s *[]string, opts ...manyOpt) {
+func (v *Var) Strings(s *[]string, opts ...manyOpt) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, s, func(ev *Var, result *string) error {
 			return ev.parseString(result)
 		}, opts...)
 	})
+	return v
 }
 
-func (v *Var) ManyString(opts ...manyOpt) *[]string {
+func (v *Var) NewStrings(opts ...manyOpt) *[]string {
 	s := new([]string)
-	v.ManyStringVar(s, opts...)
+	v.Strings(s, opts...)
 	return s
 }
 
@@ -179,27 +181,29 @@ func (v *Var) parseString(s *string) (err error) {
 	return
 }
 
-func (v *Var) BoolVar(b *bool) {
+func (v *Var) Bool(b *bool) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseBool(b) })
+	return v
 }
 
-func (v *Var) Bool() *bool {
+func (v *Var) NewBool() *bool {
 	b := new(bool)
-	v.BoolVar(b)
+	v.Bool(b)
 	return b
 }
 
-func (v *Var) ManyBoolVar(b *[]bool, opts ...manyOpt) {
+func (v *Var) Bools(b *[]bool, opts ...manyOpt) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, b, func(ev *Var, result *bool) error {
 			return ev.parseBool(result)
 		}, opts...)
 	})
+	return v
 }
 
-func (v *Var) ManyBool(opts ...manyOpt) *[]bool {
+func (v *Var) NewBools(opts ...manyOpt) *[]bool {
 	b := new([]bool)
-	v.ManyBoolVar(b, opts...)
+	v.Bools(b, opts...)
 	return b
 }
 
@@ -211,27 +215,29 @@ func (v *Var) parseBool(b *bool) (err error) {
 	return
 }
 
-func (v *Var) IntVar(i *int) {
+func (v *Var) Int(i *int) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseInt(i) })
+	return v
 }
 
-func (v *Var) Int() *int {
+func (v *Var) NewInt() *int {
 	i := new(int)
-	v.IntVar(i)
+	v.Int(i)
 	return i
 }
 
-func (v *Var) ManyIntVar(i *[]int, opts ...manyOpt) {
+func (v *Var) Ints(i *[]int, opts ...manyOpt) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, i, func(ev *Var, result *int) error {
 			return ev.parseInt(result)
 		}, opts...)
 	})
+	return v
 }
 
-func (v *Var) ManyInt(opts ...manyOpt) *[]int {
+func (v *Var) NewInts(opts ...manyOpt) *[]int {
 	i := new([]int)
-	v.ManyIntVar(i, opts...)
+	v.Ints(i, opts...)
 	return i
 }
 
@@ -243,27 +249,29 @@ func (v *Var) parseInt(i *int) (err error) {
 	return
 }
 
-func (v *Var) Float64Var(f *float64) {
+func (v *Var) Float64(f *float64) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseFloat(f) })
+	return v
 }
 
-func (v *Var) Float64() *float64 {
+func (v *Var) NewFloat64() *float64 {
 	f := new(float64)
-	v.Float64Var(f)
+	v.Float64(f)
 	return f
 }
 
-func (v *Var) ManyFloat64Var(f *[]float64, opts ...manyOpt) {
+func (v *Var) Float64s(f *[]float64, opts ...manyOpt) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, f, func(ev *Var, result *float64) error {
 			return ev.parseFloat(result)
 		}, opts...)
 	})
+	return v
 }
 
-func (v *Var) ManyFloat64(opts ...manyOpt) *[]float64 {
+func (v *Var) NewFloat64s(opts ...manyOpt) *[]float64 {
 	f := new([]float64)
-	v.ManyFloat64Var(f, opts...)
+	v.Float64s(f, opts...)
 	return f
 }
 
@@ -277,27 +285,29 @@ func (v *Var) parseFloat(f *float64) (err error) {
 	return
 }
 
-func (v *Var) URLVar(u *url.URL) {
+func (v *Var) URL(u *url.URL) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseURL(u) })
+	return v
 }
 
-func (v *Var) URL() *url.URL {
+func (v *Var) NewURL() *url.URL {
 	u := new(url.URL)
-	v.URLVar(u)
+	v.URL(u)
 	return u
 }
 
-func (v *Var) ManyURLVar(u *[]url.URL, opts ...manyOpt) {
+func (v *Var) URLs(u *[]url.URL, opts ...manyOpt) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, u, func(ev *Var, result *url.URL) error {
 			return ev.parseURL(result)
 		}, opts...)
 	})
+	return v
 }
 
-func (v *Var) ManyURL(opts ...manyOpt) *[]url.URL {
+func (v *Var) NewURLs(opts ...manyOpt) *[]url.URL {
 	u := new([]url.URL)
-	v.ManyURLVar(u, opts...)
+	v.URLs(u, opts...)
 	return u
 }
 
@@ -315,27 +325,29 @@ func (v *Var) parseURL(u *url.URL) (err error) {
 	return nil
 }
 
-func (v *Var) UUIDVar(id *uuid.UUID) {
+func (v *Var) UUID(id *uuid.UUID) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseUUID(id) })
+	return v
 }
 
-func (v *Var) UUID() *uuid.UUID {
+func (v *Var) NewUUID() *uuid.UUID {
 	id := new(uuid.UUID)
-	v.UUIDVar(id)
+	v.UUID(id)
 	return id
 }
 
-func (v *Var) ManyUUIDVar(id *[]uuid.UUID, opts ...manyOpt) {
+func (v *Var) UUIDs(id *[]uuid.UUID, opts ...manyOpt) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, id, func(ev *Var, result *uuid.UUID) error {
 			return ev.parseUUID(result)
 		}, opts...)
 	})
+	return v
 }
 
-func (v *Var) ManyUUID(opts ...manyOpt) *[]uuid.UUID {
+func (v *Var) NewUUIDs(opts ...manyOpt) *[]uuid.UUID {
 	id := new([]uuid.UUID)
-	v.ManyUUIDVar(id, opts...)
+	v.UUIDs(id, opts...)
 	return id
 }
 
