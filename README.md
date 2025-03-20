@@ -26,11 +26,11 @@ In its most basic form, the package can be used to retrieve environment variable
 ```go
 env := genv.New()
 
-StringVar := env.Var("STRING_VAR").String()
-BoolVar := env.Var("BOOL_VAR").Bool()
-IntVar := env.Var("INT_VAR").Int()
-FloatVar := env.Var("FLOAT_VAR").Float()
-URLVar := env.Var("URL_VAR").URL()
+StringVar := env.Var("STRING_VAR").NewString()
+BoolVar := env.Var("BOOL_VAR").NewBool()
+IntVar := env.Var("INT_VAR").NewInt()
+FloatVar := env.Var("FLOAT_VAR").NewFloat64()
+URLVar := env.Var("URL_VAR").NewURL()
 
 if err := env.Parse(); err != nil {
     slog.Error("env parse", "error", err.Error())
@@ -44,25 +44,21 @@ type Example struct {
 }
 
 var example Example
-env.Var("STRING_VAR").StringVar(&example.StringVar)
-env.Var("INT_VAR").IntVar(&example.IntVar)
+env.Var("STRING_VAR").String(&example.StringVar)
+env.Var("INT_VAR").Int(&example.IntVar)
 
 if err := env.Parse(); err != nil {
     slog.Error("env parse", "error", err.Error())
 }
 ```
 
-If the value from an environment variable cannot be parsed into the specified type, the function will panic. Alternatively, the `Try*` functions can be used to return an error instead of panicking.
-
-````go
-myVar, err := genv.Var("MY_VAR").TryString()
-
 ### Optional Variables
-By default, the package will fail if an environment variable is absent (either because the environment variable is not defined, or because it was set to an empty string). However, it is possible to specify that a variable is optional to prevent the panic behavior:
+
+By default, parsing will fail if an environment variable is absent (either because the environment variable is not defined, or because it was set to an empty string). However, it is possible to specify that a variable is optional to prevent the failure and default to the zero value:
 
 ```go
 var OptionalVar = genv.Var("OPTIONAL_VAR").Optional()
-````
+```
 
 ### Defaults
 
@@ -112,7 +108,3 @@ var OptionalDefaultVar = genv.Var("OPTIONAL_DEFAULT_VAR").
 ### Example
 
 See the `example` package for a more complete demonstration of how this package can be used.
-
-```
-
-```
