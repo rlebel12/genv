@@ -1,10 +1,12 @@
 # genv
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/rlebel12/genv.svg)](https://pkg.go.dev/github.com/rlebel12/genv)
 [![Test](https://github.com/rlebel12/genv/actions/workflows/test.yml/badge.svg)](https://github.com/rlebel12/genv/actions/workflows/test.yml)
 
 A small package to help work with environment variables in Go.
 
 ## Installation
+
 ```console
 go get github.com/rlebel12/genv
 ```
@@ -12,40 +14,54 @@ go get github.com/rlebel12/genv
 ## Usage
 
 First, ensure that the package is imported:
+
 ```go
 import "github.com/rlebel12/genv"
 ```
 
 ### Basic
+
 In its most basic form, the package can be used to retrieve environment variables and then parse them into specified types:
 
 ```go
-var genv := genv.New()
-var StringVar = genv.Var("STRING_VAR").String()
-var BoolVar = genv.Var("BOOL_VAR").Bool()
-var IntVar = genv.Var("INT_VAR").Int()
-var FloatVar = genv.Var("FLOAT_VAR").Float()
-var URLVar = genv.Var("URL_VAR").URL()
+env := genv.New()
+
+StringVar := env.Var("STRING_VAR").NewString()
+BoolVar := env.Var("BOOL_VAR").NewBool()
+IntVar := env.Var("INT_VAR").NewInt()
+FloatVar := env.Var("FLOAT_VAR").NewFloat64()
+URLVar := env.Var("URL_VAR").NewURL()
+
+if err := env.Parse(); err != nil {
+    slog.Error("env parse", "error", err.Error())
+}
+
+// Or instead, using pointers:
+
+type Example struct {
+    StringVar string
+    IntVar    int
+}
+
+var example Example
+env.Var("STRING_VAR").String(&example.StringVar)
+env.Var("INT_VAR").Int(&example.IntVar)
+
+if err := env.Parse(); err != nil {
+    slog.Error("env parse", "error", err.Error())
+}
 ```
-
-If the value from an environment variable cannot be parsed into the specified type, the function will panic. Alternatively, the `Try*` functions can be used to return an error instead of panicking.
-```go
-myVar, err := genv.Var("MY_VAR").TryString()
-```
-
-#### A Note on Panics
-The decision to panic by default may be off-putting at first. The spirit of `genv` is that the library should be used to quickly populate variables from the environment at the beginning of the program. It should be one of the first, if not *the* first, actions to take place upon starting the program. If `genv` panics, it means that the environment running the program has been misconfigured. In this situation, the default expectation is that the program should not be allowed to run while in an incorrect state. There should be no situation where this library panics because it is impossible to use in a way that accommodates the given environment variables.
-
-If this is not the desired behavior, or if you wish to use `genv` far away from program startup, the `Try*` functions should be used instead. 
 
 ### Optional Variables
-By default, the package will fail if an environment variable is absent (either because the environment variable is not defined, or because it was set to an empty string). However, it is possible to specify that a variable is optional to prevent the panic behavior:
+
+By default, parsing will fail if an environment variable is absent (either because the environment variable is not defined, or because it was set to an empty string). However, it is possible to specify that a variable is optional to prevent the failure and default to the zero value:
 
 ```go
 var OptionalVar = genv.Var("OPTIONAL_VAR").Optional()
 ```
 
 ### Defaults
+
 You can specify a default value to use if the environment variable is absent:
 
 ```go
@@ -67,7 +83,7 @@ var genv := genv.New(
 #### Allow Defaults: Individual Override
 
 Override the behavior for individual environment variables by passing an `WithAllowDefault` option to `Default`:
-    
+
 ```go
 var DefaultVar = genv.Var("DEFAULT_VAR").Default(
     "default value",
@@ -78,6 +94,7 @@ var DefaultVar = genv.Var("DEFAULT_VAR").Default(
 This approach takes priority over the global override.
 
 ### Combining Options
+
 Options can be chained together. For example, it is possible to declare that an environment variable is both
 optional and has a default value. This means that the default value will be used if allowed and necessary, and the program
 will not panic if the final value is still absent.
@@ -89,11 +106,5 @@ var OptionalDefaultVar = genv.Var("OPTIONAL_DEFAULT_VAR").
 ```
 
 ### Example
+
 See the `example` package for a more complete demonstration of how this package can be used.
-
-### Variable Presence
-It is also possible to simply check whether an environment variable has been set to a non-empty value:
-
-```go
-var PresentVar = genv.Present("PRESENT")
-```
