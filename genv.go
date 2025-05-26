@@ -54,31 +54,63 @@ func WithAllowDefault(allowFn allowFunc) genvOpt {
 	}
 }
 
-// Returns a new environment variable with the given key.
-func (genv *Genv) Var(key string, opts ...envVarOpt) *Var {
-	ev := new(Var)
-	ev.key = key
-	ev.allowDefault = genv.allowDefault
-	ev.splitKey = genv.splitKey
-	ev.value, ev.found = os.LookupEnv(key)
-	ev.genv = genv
-
-	for _, opt := range opts {
-		opt(ev)
-	}
-
-	return ev
-}
-
-func (genv *Genv) Parse() (err error) {
-	defer func() { genv.varFuncs = nil }()
-	for _, f := range genv.varFuncs {
-		if err = f(); err != nil {
+func (genv *Genv) Parse(vars ...*Var[any, any]) (err error) {
+	for _, ev := range vars {
+		value := os.Getenv(ev.key)
+		if ev.many {
+			split := strings.Split(value, ev.splitKey)
+			for _, val := range split {
+				if val == "" {
+					continue
+				}
+				vars = append(vars, Var{
+					key:          ev.key,
+					value:        val,
+					found:        ev.found,
+					optional:     ev.optional,
+					allowDefault: ev.allowDefault,
+					genv:         ev.genv,
+				})
+			}
+			if !ev.optional && len(vars) == 0 {
+				return fmt.Errorf(errFmtInvalidVar, ev.key, ErrRequiredEnvironmentVariable)
+			}
+		}
+		if err = v.parse(value); err != nil {
 			return
 		}
+		// if err = v.parse() {
+
+		// }
 	}
-	return
+	return nil
 }
+
+// Returns a new environment variable with the given key.
+// func (genv *Genv) Var(key string, opts ...envVarOpt) *Var[T, U] {
+// 	ev := new(Var)
+// 	ev.key = key
+// 	ev.allowDefault = genv.allowDefault
+// 	ev.splitKey = genv.splitKey
+// 	ev.value, ev.found = os.LookupEnv(key)
+// 	ev.genv = genv
+
+// 	for _, opt := range opts {
+// 		opt(ev)
+// 	}
+
+// 	return ev
+// }
+
+// func (genv *Genv) Parse() (err error) {
+// 	defer func() { genv.varFuncs = nil }()
+// 	for _, f := range genv.varFuncs {
+// 		if err = f(); err != nil {
+// 			return
+// 		}
+// 	}
+// 	return
+// }
 
 func (genv *Genv) Clone() *Genv {
 	clone := New(
@@ -100,15 +132,41 @@ func (genv *Genv) WithAllowDefaultAlways() fallbackOpt {
 	})
 }
 
-type Var struct {
-	key          string
-	value        string
-	found        bool
+type oneOrMany[U any] interface {
+	U | []U
+}
+
+type Var[T any, U any] struct {
+	key    string
+	target *T
+	parse  func(string) (U, error)
+	many   bool
+	// value        string
+	// found        bool
 	optional     bool
 	allowDefault allowFunc
 	splitKey     string
-	genv         *Genv
 	fb           *fallback
+}
+
+func (ev *Var[T, U]) parseSingle(value string) (err error) {
+	return nil
+}
+
+func (ev *Var[T, U]) parseMany(value string) (err error) {
+	results := []U{}
+	values := strings.Split(value, ev.splitKey)
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		parsed, err := ev.parse(value)
+		if err != nil {
+			return err
+		}
+		results = append(results, parsed)
+	}
+	return nil
 }
 
 type fallback struct {
@@ -118,13 +176,13 @@ type fallback struct {
 
 type fallbackOpt func(*fallback)
 
-func (ev *Var) Optional() *Var {
+func (ev *Var[T, U]) Optional() *Var[T, U] {
 	ev.optional = true
 	return ev
 }
 
 // Sets the default value for the environment variable if not present
-func (ev *Var) Default(value string, opts ...fallbackOpt) *Var {
+func (ev *Var[T, U]) Default(value string, opts ...fallbackOpt) *Var[T, U] {
 	fb := new(fallback)
 	fb.allow = ev.allowDefault
 	fb.value = value
@@ -137,41 +195,66 @@ func (ev *Var) Default(value string, opts ...fallbackOpt) *Var {
 	return ev
 }
 
-type manyOpt func(*Var)
+type manyOpt func(*Var[T, U])
 
 func (genv *Genv) WithSplitKey(splitKey string) manyOpt {
-	return func(mev *Var) {
+	return func(mev *Var[T, U]) {
 		mev.splitKey = splitKey
 	}
 }
 
 // String parses an environment variable into any type with string as underlying type
-func String[T ~string](s *T, v *Var) {
-	prepareSingleVar(v, s, parseString)
+func String[T ~string](key string, target *T) *Var[T, T] {
+	return newVar(key, target, false, parseString[T])
 }
 
-func NewString[T ~string](v *Var) *T {
-	s := new(T)
-	String(s, v)
-	return s
-}
-
-// Strings parses an environment variable into a slice of any type with string as underlying type
-func Strings[T ~string](s *[]T, v *Var, opts ...manyOpt) {
-	prepareManyVars(v, s, parseString, opts...)
-}
-
-func NewStrings[T ~string](v *Var, opts ...manyOpt) *[]T {
-	s := new([]T)
-	Strings(s, v, opts...)
-	return s
+func StringSlice[S []T, T ~string](key string, target *S) *Var[S, T] {
+	return newVar(key, target, true, parseString[T])
 }
 
 func parseString[T ~string](value string) (T, error) {
 	return T(value), nil
 }
 
-func (v *Var) parseString(s *string) (err error) {
+func parseManyy[S []T, T any](parse func(string) (T, error), values ...string) (S, error) {
+	var err error
+	result := make(S, len(values))
+	for i, value := range values {
+		result[i], err = parse(value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+func newVar[T any, U any](key string, target *T, many bool, parse func(string) (U, error)) *Var[T, U] {
+	return &Var[T, U]{
+		key:    key,
+		target: target,
+		parse:  parse,
+		many:   many,
+	}
+}
+
+func NewString[T ~string](v *Var[T, U]) *T {
+	s := new(T)
+	String(s, v)
+	return s
+}
+
+// Strings parses an environment variable into a slice of any type with string as underlying type
+// func Strings[T ~string](s *[]T, v *Var[T, U], opts ...manyOpt) {
+// 	prepareManyVars(v, s, parseString, opts...)
+// }
+
+func NewStrings[T ~string](v *Var[T, U], opts ...manyOpt) *[]T {
+	s := new([]T)
+	Strings(s, v, opts...)
+	return s
+}
+
+func (v *Var[T, U]) parseString(s *string) (err error) {
 	*s, err = parse(v, func(value string) (string, error) {
 		return value, nil
 	})
@@ -181,33 +264,33 @@ func (v *Var) parseString(s *string) (err error) {
 	return
 }
 
-func (v *Var) Bool(b *bool) *Var {
+func (v *Var[T, U]) Bool(b *bool) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseBool(b) })
 	return v
 }
 
-func (v *Var) NewBool() *bool {
+func (v *Var[T, U]) NewBool() *bool {
 	b := new(bool)
 	v.Bool(b)
 	return b
 }
 
-func (v *Var) Bools(b *[]bool, opts ...manyOpt) *Var {
+func (v *Var[T, U]) Bools(b *[]bool, opts ...manyOpt) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, b, func(ev *Var, result *bool) error {
+		return parseMany(v, b, func(ev *Var[T, U], result *bool) error {
 			return ev.parseBool(result)
 		}, opts...)
 	})
 	return v
 }
 
-func (v *Var) NewBools(opts ...manyOpt) *[]bool {
+func (v *Var[T, U]) NewBools(opts ...manyOpt) *[]bool {
 	b := new([]bool)
 	v.Bools(b, opts...)
 	return b
 }
 
-func (v *Var) parseBool(b *bool) (err error) {
+func (v *Var[T, U]) parseBool(b *bool) (err error) {
 	*b, err = parse(v, strconv.ParseBool)
 	if err != nil {
 		err = fmt.Errorf("parse bool: %w", err)
@@ -215,33 +298,33 @@ func (v *Var) parseBool(b *bool) (err error) {
 	return
 }
 
-func (v *Var) Int(i *int) *Var {
+func (v *Var[T, U]) Int(i *int) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseInt(i) })
 	return v
 }
 
-func (v *Var) NewInt() *int {
+func (v *Var[T, U]) NewInt() *int {
 	i := new(int)
 	v.Int(i)
 	return i
 }
 
-func (v *Var) Ints(i *[]int, opts ...manyOpt) *Var {
+func (v *Var[T, U]) Ints(i *[]int, opts ...manyOpt) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, i, func(ev *Var, result *int) error {
+		return parseMany(v, i, func(ev *Var[T, U], result *int) error {
 			return ev.parseInt(result)
 		}, opts...)
 	})
 	return v
 }
 
-func (v *Var) NewInts(opts ...manyOpt) *[]int {
+func (v *Var[T, U]) NewInts(opts ...manyOpt) *[]int {
 	i := new([]int)
 	v.Ints(i, opts...)
 	return i
 }
 
-func (v *Var) parseInt(i *int) (err error) {
+func (v *Var[T, U]) parseInt(i *int) (err error) {
 	*i, err = parse(v, strconv.Atoi)
 	if err != nil {
 		err = fmt.Errorf("parse int: %w", err)
@@ -249,33 +332,33 @@ func (v *Var) parseInt(i *int) (err error) {
 	return
 }
 
-func (v *Var) Float64(f *float64) *Var {
+func (v *Var[T, U]) Float64(f *float64) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseFloat(f) })
 	return v
 }
 
-func (v *Var) NewFloat64() *float64 {
+func (v *Var[T, U]) NewFloat64() *float64 {
 	f := new(float64)
 	v.Float64(f)
 	return f
 }
 
-func (v *Var) Float64s(f *[]float64, opts ...manyOpt) *Var {
+func (v *Var[T, U]) Float64s(f *[]float64, opts ...manyOpt) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, f, func(ev *Var, result *float64) error {
+		return parseMany(v, f, func(ev *Var[T, U], result *float64) error {
 			return ev.parseFloat(result)
 		}, opts...)
 	})
 	return v
 }
 
-func (v *Var) NewFloat64s(opts ...manyOpt) *[]float64 {
+func (v *Var[T, U]) NewFloat64s(opts ...manyOpt) *[]float64 {
 	f := new([]float64)
 	v.Float64s(f, opts...)
 	return f
 }
 
-func (v *Var) parseFloat(f *float64) (err error) {
+func (v *Var[T, U]) parseFloat(f *float64) (err error) {
 	*f, err = parse(v, func(s string) (float64, error) {
 		return strconv.ParseFloat(s, 64)
 	})
@@ -285,33 +368,33 @@ func (v *Var) parseFloat(f *float64) (err error) {
 	return
 }
 
-func (v *Var) URL(u *url.URL) *Var {
+func (v *Var[T, U]) URL(u *url.URL) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseURL(u) })
 	return v
 }
 
-func (v *Var) NewURL() *url.URL {
+func (v *Var[T, U]) NewURL() *url.URL {
 	u := new(url.URL)
 	v.URL(u)
 	return u
 }
 
-func (v *Var) URLs(u *[]url.URL, opts ...manyOpt) *Var {
+func (v *Var[T, U]) URLs(u *[]url.URL, opts ...manyOpt) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, u, func(ev *Var, result *url.URL) error {
+		return parseMany(v, u, func(ev *Var[T, U], result *url.URL) error {
 			return ev.parseURL(result)
 		}, opts...)
 	})
 	return v
 }
 
-func (v *Var) NewURLs(opts ...manyOpt) *[]url.URL {
+func (v *Var[T, U]) NewURLs(opts ...manyOpt) *[]url.URL {
 	u := new([]url.URL)
 	v.URLs(u, opts...)
 	return u
 }
 
-func (v *Var) parseURL(u *url.URL) (err error) {
+func (v *Var[T, U]) parseURL(u *url.URL) (err error) {
 	*u, err = parse(v, func(s string) (url.URL, error) {
 		result, err := url.Parse(s)
 		if err != nil {
@@ -325,33 +408,33 @@ func (v *Var) parseURL(u *url.URL) (err error) {
 	return nil
 }
 
-func (v *Var) UUID(id *uuid.UUID) *Var {
+func (v *Var[T, U]) UUID(id *uuid.UUID) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseUUID(id) })
 	return v
 }
 
-func (v *Var) NewUUID() *uuid.UUID {
+func (v *Var[T, U]) NewUUID() *uuid.UUID {
 	id := new(uuid.UUID)
 	v.UUID(id)
 	return id
 }
 
-func (v *Var) UUIDs(id *[]uuid.UUID, opts ...manyOpt) *Var {
+func (v *Var[T, U]) UUIDs(id *[]uuid.UUID, opts ...manyOpt) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, id, func(ev *Var, result *uuid.UUID) error {
+		return parseMany(v, id, func(ev *Var[T, U], result *uuid.UUID) error {
 			return ev.parseUUID(result)
 		}, opts...)
 	})
 	return v
 }
 
-func (v *Var) NewUUIDs(opts ...manyOpt) *[]uuid.UUID {
+func (v *Var[T, U]) NewUUIDs(opts ...manyOpt) *[]uuid.UUID {
 	id := new([]uuid.UUID)
 	v.UUIDs(id, opts...)
 	return id
 }
 
-func (v *Var) parseUUID(id *uuid.UUID) (err error) {
+func (v *Var[T, U]) parseUUID(id *uuid.UUID) (err error) {
 	*id, err = parse(v, uuid.Parse)
 	if err != nil {
 		return fmt.Errorf("parse uuid: %w", err)
@@ -359,9 +442,10 @@ func (v *Var) parseUUID(id *uuid.UUID) (err error) {
 	return nil
 }
 
-func (v *Var) getValue() (string, error) {
-	if v.value == "" && v.fb != nil && v.fb.allow != nil {
-		allow, err := v.fb.allow(v.genv)
+func (v *Var[T, U]) getValue() (string, error) {
+	value, _ := os.LookupEnv(v.key)
+	if value == "" && v.fb != nil && v.fb.allow != nil {
+		allow, err := v.fb.allow(genv)
 		if err != nil {
 			return "", fmt.Errorf(errFmtInvalidVar, v.key, err)
 		}
@@ -369,12 +453,12 @@ func (v *Var) getValue() (string, error) {
 			return v.fb.value, nil
 		}
 	}
-	return v.value, nil
+	return value, nil
 }
 
 const errFmtInvalidVar = "%s is invalid: %w"
 
-func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
+func parse[T any, U any](ev *Var[T, U], fn func(string) (T, error)) (T, error) {
 	var (
 		result T
 		err    error
@@ -405,7 +489,7 @@ func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
 
 var ErrRequiredEnvironmentVariable = errors.New("environment variable is empty or unset")
 
-func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...manyOpt) error {
+func parseMany[T any, U any](ev *Var[T, U], result *[]T, fn func(*Var[T, U], *T) error, opts ...manyOpt) error {
 	for _, opt := range opts {
 		opt(ev)
 	}
@@ -449,12 +533,12 @@ func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...man
 	return nil
 }
 
-type envVarOpt func(*Var)
+type envVarOpt func(*Var[T, U])
 
 type genvOpt func(*Genv)
 
 // Int parses an environment variable into any type with int as underlying type
-func Int[T ~int](v *Var, i *T) *Var {
+func Int[T ~int](v *Var[T, U], i *T) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		var temp int
 		err := v.parseInt(&temp)
@@ -468,7 +552,7 @@ func Int[T ~int](v *Var, i *T) *Var {
 }
 
 // Ints parses an environment variable into a slice of any type with int as underlying type
-func Ints[T ~int](v *Var, i *[]T, opts ...manyOpt) *Var {
+func Ints[T ~int](v *Var[T, U], i *[]T, opts ...manyOpt) *Var[T, U] {
 	var temp []int
 	result := v.Ints(&temp, opts...)
 	v.genv.varFuncs = append(v.genv.varFuncs[:len(v.genv.varFuncs)-1], func() error {
@@ -486,7 +570,7 @@ func Ints[T ~int](v *Var, i *[]T, opts ...manyOpt) *Var {
 }
 
 // Bool parses an environment variable into any type with bool as underlying type
-func Bool[T ~bool](v *Var, b *T) *Var {
+func Bool[T ~bool](v *Var[T, U], b *T) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		var temp bool
 		err := v.parseBool(&temp)
@@ -500,7 +584,7 @@ func Bool[T ~bool](v *Var, b *T) *Var {
 }
 
 // Bools parses an environment variable into a slice of any type with bool as underlying type
-func Bools[T ~bool](v *Var, b *[]T, opts ...manyOpt) *Var {
+func Bools[T ~bool](v *Var[T, U], b *[]T, opts ...manyOpt) *Var[T, U] {
 	var temp []bool
 	result := v.Bools(&temp, opts...)
 	v.genv.varFuncs = append(v.genv.varFuncs[:len(v.genv.varFuncs)-1], func() error {
@@ -518,7 +602,7 @@ func Bools[T ~bool](v *Var, b *[]T, opts ...manyOpt) *Var {
 }
 
 // Float64 parses an environment variable into any type with float64 as underlying type
-func Float64[T ~float64](v *Var, f *T) *Var {
+func Float64[T ~float64](v *Var[T, U], f *T) *Var[T, U] {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		var temp float64
 		err := v.parseFloat(&temp)
@@ -531,7 +615,7 @@ func Float64[T ~float64](v *Var, f *T) *Var {
 	return v
 }
 
-func prepareSingleVar[T any](v *Var, result *T, p func(value string) (T, error)) {
+func prepareSingleVar[T any](v *Var[T, U], result *T, p func(value string) (T, error)) {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		value, err := parse(v, p)
 		if err != nil {
@@ -542,7 +626,7 @@ func prepareSingleVar[T any](v *Var, result *T, p func(value string) (T, error))
 	})
 }
 
-func prepareManyVars[T any](ev *Var, result *[]T, p func(value string) (T, error), opts ...manyOpt) {
+func prepareManyVars[T any](ev *Var[T, U], result *[]T, p func(value string) (T, error), opts ...manyOpt) {
 	ev.genv.varFuncs = append(ev.genv.varFuncs, func() error {
 		for _, opt := range opts {
 			opt(ev)
