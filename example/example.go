@@ -23,18 +23,34 @@ func main() {
 		"OptionalFloatVar", settings.OptionalFloatVar,
 		"AdvancedURLVar", settings.AdvancedURLVar,
 		"ManyIntVar", settings.ManyIntVar,
+		"DatabaseName", settings.DatabaseName,
+		"Port", settings.Port,
+		"IsProduction", settings.IsProduction,
+		"TimeoutMs", settings.TimeoutMs,
 	)
 }
 
-type Settings struct {
-	StringVar              string
-	IntVar                 int
-	BoolVar                bool
-	AlwaysDefaultStringVar string
-	OptionalFloatVar       float64
-	AdvancedURLVar         url.URL
-	ManyIntVar             []int
-}
+type (
+	Settings struct {
+		StringVar              string
+		IntVar                 int
+		BoolVar                bool
+		AlwaysDefaultStringVar string
+		OptionalFloatVar       float64
+		AdvancedURLVar         url.URL
+		ManyIntVar             []int
+		DatabaseName           CustomString
+		ManyCustomStrings      []CustomString
+		Port                   Port
+		IsProduction           IsProduction
+		TimeoutMs              TimeoutMs
+	}
+
+	CustomString string
+	Port         int
+	IsProduction bool
+	TimeoutMs    float64
+)
 
 func NewSettings() (Settings, error) {
 	env := genv.New(
@@ -46,12 +62,11 @@ func NewSettings() (Settings, error) {
 
 	var s Settings
 
-	env.Var("STRING_VAR").String(&s.StringVar)
+	genv.String(&s.StringVar, env.Var("STRING_VAR"))
 	env.Var("INT_VAR").Int(&s.IntVar)
 	env.Var("BOOL_VAR").Bool(&s.BoolVar)
-	env.Var("ALWAYS_DEFAULT_STRING_VAR").
-		String(&s.AlwaysDefaultStringVar).
-		Default("default value", env.WithAllowDefaultAlways())
+	genv.String(&s.AlwaysDefaultStringVar, env.Var("ALWAYS_DEFAULT_STRING_VAR").
+		Default("default value", env.WithAllowDefaultAlways()))
 	env.Var("OPTIONAL_FLOAT_VAR").Float64(&s.OptionalFloatVar).Optional()
 	env.Var("ADVANCED_URL_VAR").
 		Default("https://example.com",
@@ -72,6 +87,12 @@ func NewSettings() (Settings, error) {
 		Optional().
 		Default("123;456;", env.WithAllowDefaultAlways()).
 		Ints(&s.ManyIntVar)
+
+	genv.String(&s.DatabaseName, env.Var("DATABASE_NAME").Default("myapp_db", env.WithAllowDefaultAlways()))
+	genv.Strings(&s.ManyCustomStrings, env.Var("MANY_CUSTOM_STRINGS").Default("a;b;c", env.WithAllowDefaultAlways()))
+	genv.Int(env.Var("PORT").Default("8080", env.WithAllowDefaultAlways()), &s.Port)
+	genv.Bool(env.Var("IS_PRODUCTION").Default("false", env.WithAllowDefaultAlways()), &s.IsProduction)
+	genv.Float64(env.Var("TIMEOUT_MS").Default("5000.0", env.WithAllowDefaultAlways()), &s.TimeoutMs)
 
 	if err := env.Parse(); err != nil {
 		return Settings{}, fmt.Errorf("parse env: %w", err)
