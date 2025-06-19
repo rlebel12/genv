@@ -32,13 +32,13 @@ func TestWithAllowDefault(t *testing.T) {
 func TestNew(t *testing.T) {
 	for name, test := range map[string]struct {
 		value         string
-		opts          []envVarOpt
+		opts          []Opt[Var]
 		expectedValue string
 		expectedFound bool
 	}{
 		"Defined":     {"val", nil, "val", true},
 		"Undefined":   {"", nil, "", false},
-		"WithOptions": {"val", []envVarOpt{func(e *Var) { e.value = "opts" }}, "opts", true},
+		"WithOptions": {"val", []Opt[Var]{func(e *Var) { e.value = "opts" }}, "opts", true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			const key = "TEST_VAR"
@@ -118,8 +118,8 @@ func TestDefault(t *testing.T) {
 
 			customOpt := new(MockDefaultOpt)
 			customOpt.On("optFunc")
-			opts := []fallbackOpt{func(fb *fallback) { customOpt.optFunc() }}
-			fallbackOpts := make([]fallbackOpt, len(test.opts))
+			opts := []Opt[fallback]{func(fb *fallback) { customOpt.optFunc() }}
+			fallbackOpts := make([]Opt[fallback], len(test.opts))
 			for i, opt := range test.opts {
 				fallbackOpts[i] = genv.WithAllowDefault(opt)
 			}
@@ -309,7 +309,7 @@ func TestURL(t *testing.T) {
 		expected string
 		wantErr  bool
 	}{
-		"Valid":   {"http://example.com:8080", "http://example.com:8080", false},
+		"Valid":   {"https://example.com:8080", "https://example.com:8080", false},
 		"Invalid": {"http://invalid url", "", true},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -330,7 +330,7 @@ func TestManyURL(t *testing.T) {
 		expected []string
 		wantErr  bool
 	}{
-		"Valid":   {"http://example.com:8080,http://example.com:8081", ",", []string{"http://example.com:8080", "http://example.com:8081"}, false},
+		"Valid":   {"https://example.com:8080,https://example.com:8081", ",", []string{"https://example.com:8080", "https://example.com:8081"}, false},
 		"Invalid": {"http://invalid url", ",", nil, true},
 	} {
 		t.Run(name, func(t *testing.T) {

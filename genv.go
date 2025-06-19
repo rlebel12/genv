@@ -21,7 +21,7 @@ type (
 	allowFunc func(*Genv) (bool, error)
 )
 
-func New(opts ...genvOpt) *Genv {
+func New(opts ...Opt[Genv]) *Genv {
 	genv := &Genv{
 		allowDefault: func(genv *Genv) (bool, error) {
 			genv = genv.Clone()
@@ -42,20 +42,20 @@ func New(opts ...genvOpt) *Genv {
 	return genv
 }
 
-func WithSplitKey(splitKey string) genvOpt {
+func WithSplitKey(splitKey string) Opt[Genv] {
 	return func(genv *Genv) {
 		genv.splitKey = splitKey
 	}
 }
 
-func WithAllowDefault(allowFn allowFunc) genvOpt {
+func WithAllowDefault(allowFn allowFunc) Opt[Genv] {
 	return func(genv *Genv) {
 		genv.allowDefault = allowFn
 	}
 }
 
-// Returns a new environment variable with the given key.
-func (genv *Genv) Var(key string, opts ...envVarOpt) *Var {
+// Var Returns a new environment variable with the given key.
+func (genv *Genv) Var(key string, opts ...Opt[Var]) *Var {
 	ev := new(Var)
 	ev.key = key
 	ev.allowDefault = genv.allowDefault
@@ -88,13 +88,13 @@ func (genv *Genv) Clone() *Genv {
 	return clone
 }
 
-func (genv *Genv) WithAllowDefault(allow func(genv *Genv) (bool, error)) fallbackOpt {
+func (genv *Genv) WithAllowDefault(allow func(genv *Genv) (bool, error)) Opt[fallback] {
 	return func(f *fallback) {
 		f.allow = allow
 	}
 }
 
-func (genv *Genv) WithAllowDefaultAlways() fallbackOpt {
+func (genv *Genv) WithAllowDefaultAlways() Opt[fallback] {
 	return genv.WithAllowDefault(func(*Genv) (bool, error) {
 		return true, nil
 	})
@@ -116,30 +116,26 @@ type fallback struct {
 	value string
 }
 
-type fallbackOpt func(*fallback)
-
-func (ev *Var) Optional() *Var {
-	ev.optional = true
-	return ev
+func (v *Var) Optional() *Var {
+	v.optional = true
+	return v
 }
 
-// Sets the default value for the environment variable if not present
-func (ev *Var) Default(value string, opts ...fallbackOpt) *Var {
+// Default Sets the default value for the environment variable if not present
+func (v *Var) Default(value string, opts ...Opt[fallback]) *Var {
 	fb := new(fallback)
-	fb.allow = ev.allowDefault
+	fb.allow = v.allowDefault
 	fb.value = value
 
 	for _, opt := range opts {
 		opt(fb)
 	}
 
-	ev.fb = fb
-	return ev
+	v.fb = fb
+	return v
 }
 
-type manyOpt func(*Var)
-
-func (genv *Genv) WithSplitKey(splitKey string) manyOpt {
+func (genv *Genv) WithSplitKey(splitKey string) Opt[Var] {
 	return func(mev *Var) {
 		mev.splitKey = splitKey
 	}
@@ -156,7 +152,7 @@ func (v *Var) NewString() *string {
 	return s
 }
 
-func (v *Var) Strings(s *[]string, opts ...manyOpt) *Var {
+func (v *Var) Strings(s *[]string, opts ...Opt[Var]) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, s, func(ev *Var, result *string) error {
 			return ev.parseString(result)
@@ -165,7 +161,7 @@ func (v *Var) Strings(s *[]string, opts ...manyOpt) *Var {
 	return v
 }
 
-func (v *Var) NewStrings(opts ...manyOpt) *[]string {
+func (v *Var) NewStrings(opts ...Opt[Var]) *[]string {
 	s := new([]string)
 	v.Strings(s, opts...)
 	return s
@@ -192,7 +188,7 @@ func (v *Var) NewBool() *bool {
 	return b
 }
 
-func (v *Var) Bools(b *[]bool, opts ...manyOpt) *Var {
+func (v *Var) Bools(b *[]bool, opts ...Opt[Var]) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, b, func(ev *Var, result *bool) error {
 			return ev.parseBool(result)
@@ -201,7 +197,7 @@ func (v *Var) Bools(b *[]bool, opts ...manyOpt) *Var {
 	return v
 }
 
-func (v *Var) NewBools(opts ...manyOpt) *[]bool {
+func (v *Var) NewBools(opts ...Opt[Var]) *[]bool {
 	b := new([]bool)
 	v.Bools(b, opts...)
 	return b
@@ -226,7 +222,7 @@ func (v *Var) NewInt() *int {
 	return i
 }
 
-func (v *Var) Ints(i *[]int, opts ...manyOpt) *Var {
+func (v *Var) Ints(i *[]int, opts ...Opt[Var]) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, i, func(ev *Var, result *int) error {
 			return ev.parseInt(result)
@@ -235,7 +231,7 @@ func (v *Var) Ints(i *[]int, opts ...manyOpt) *Var {
 	return v
 }
 
-func (v *Var) NewInts(opts ...manyOpt) *[]int {
+func (v *Var) NewInts(opts ...Opt[Var]) *[]int {
 	i := new([]int)
 	v.Ints(i, opts...)
 	return i
@@ -260,7 +256,7 @@ func (v *Var) NewFloat64() *float64 {
 	return f
 }
 
-func (v *Var) Float64s(f *[]float64, opts ...manyOpt) *Var {
+func (v *Var) Float64s(f *[]float64, opts ...Opt[Var]) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, f, func(ev *Var, result *float64) error {
 			return ev.parseFloat(result)
@@ -269,7 +265,7 @@ func (v *Var) Float64s(f *[]float64, opts ...manyOpt) *Var {
 	return v
 }
 
-func (v *Var) NewFloat64s(opts ...manyOpt) *[]float64 {
+func (v *Var) NewFloat64s(opts ...Opt[Var]) *[]float64 {
 	f := new([]float64)
 	v.Float64s(f, opts...)
 	return f
@@ -296,7 +292,7 @@ func (v *Var) NewURL() *url.URL {
 	return u
 }
 
-func (v *Var) URLs(u *[]url.URL, opts ...manyOpt) *Var {
+func (v *Var) URLs(u *[]url.URL, opts ...Opt[Var]) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, u, func(ev *Var, result *url.URL) error {
 			return ev.parseURL(result)
@@ -305,7 +301,7 @@ func (v *Var) URLs(u *[]url.URL, opts ...manyOpt) *Var {
 	return v
 }
 
-func (v *Var) NewURLs(opts ...manyOpt) *[]url.URL {
+func (v *Var) NewURLs(opts ...Opt[Var]) *[]url.URL {
 	u := new([]url.URL)
 	v.URLs(u, opts...)
 	return u
@@ -336,7 +332,7 @@ func (v *Var) NewUUID() *uuid.UUID {
 	return id
 }
 
-func (v *Var) UUIDs(id *[]uuid.UUID, opts ...manyOpt) *Var {
+func (v *Var) UUIDs(id *[]uuid.UUID, opts ...Opt[Var]) *Var {
 	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 		return parseMany(v, id, func(ev *Var, result *uuid.UUID) error {
 			return ev.parseUUID(result)
@@ -345,7 +341,7 @@ func (v *Var) UUIDs(id *[]uuid.UUID, opts ...manyOpt) *Var {
 	return v
 }
 
-func (v *Var) NewUUIDs(opts ...manyOpt) *[]uuid.UUID {
+func (v *Var) NewUUIDs(opts ...Opt[Var]) *[]uuid.UUID {
 	id := new([]uuid.UUID)
 	v.UUIDs(id, opts...)
 	return id
@@ -405,7 +401,7 @@ func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
 
 var ErrRequiredEnvironmentVariable = errors.New("environment variable is empty or unset")
 
-func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...manyOpt) error {
+func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...Opt[Var]) error {
 	for _, opt := range opts {
 		opt(ev)
 	}
@@ -449,6 +445,4 @@ func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...man
 	return nil
 }
 
-type envVarOpt func(*Var)
-
-type genvOpt func(*Genv)
+type Opt[T any] func(*T)
