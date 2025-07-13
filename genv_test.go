@@ -1,7 +1,13 @@
 package genv
 
 import (
+	"errors"
+	"fmt"
+	"net/url"
+	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -54,8 +60,7 @@ func TestNew(t *testing.T) {
 				splitKey: ",",
 				genv:     genv,
 			}
-			// We cannot test function equality
-			expected.allowDefault, actual.allowDefault = nil, nil
+				expected.allowDefault, actual.allowDefault = nil, nil
 			assert.Equal(t, *expected, *actual)
 		})
 	}
@@ -403,4 +408,744 @@ func TestParseManyNoSplitKey(t *testing.T) {
 	got := env.Var("TEST_VAR").NewInts(env.WithSplitKey(""))
 	assert.Error(t, env.Parse())
 	assert.Nil(t, *got)
+}
+
+func TestNewRegistry(t *testing.T) {
+	registry := NewRegistry()
+	assert.NotNil(t, registry)
+
+	parser, exists := registry.get(reflect.TypeOf(""))
+	assert.False(t, exists)
+	assert.Equal(t, Parser{}, parser)
+}
+
+func TestNewDefaultRegistry(t *testing.T) {
+	registry := NewDefaultRegistry()
+	assert.NotNil(t, registry)
+
+	testCases := []any{
+		"",          // string
+		false,       // bool
+		0,           // int
+		0.0,         // float64
+		url.URL{},   // url.URL
+		uuid.UUID{}, // uuid.UUID
+	}
+
+	for _, testCase := range testCases {
+		targetType := reflect.TypeOf(testCase)
+		parser, exists := registry.get(targetType)
+		assert.True(t, exists, "parser should exist for type %s", targetType)
+		assert.NotNil(t, parser.ParseFn)
+		assert.Equal(t, targetType, parser.TargetType())
+	}
+}
+
+func TestParserRegistryRegisterTypedParser(t *testing.T) {
+	registry := NewRegistry()
+
+	type customType string
+	RegisterTypedParserOn(registry, func(s string) (customType, error) {
+		return customType("custom:" + s), nil
+	})
+
+	var zero customType
+	targetType := reflect.TypeOf(zero)
+	parser, exists := registry.get(targetType)
+	assert.True(t, exists)
+
+	result, err := parser.Parse("test")
+	assert.NoError(t, err)
+	assert.Equal(t, customType("custom:test"), result)
+}
+
+func TestParserRegistryRegisterParseFunc(t *testing.T) {
+	registry := NewRegistry()
+
+	type customType string
+	var zero customType
+	targetType := reflect.TypeOf(zero)
+
+	registry.RegisterParseFunc(targetType, func(s string) (any, error) {
+		return customType("func:" + s), nil
+	})
+
+	parser, exists := registry.get(targetType)
+	assert.True(t, exists)
+
+	result, err := parser.Parse("test")
+	assert.NoError(t, err)
+	assert.Equal(t, customType("func:test"), result)
+}
+
+func TestGenvWithCustomRegistry(t *testing.T) {
+	registry := NewRegistry()
+	type customType string
+	RegisterTypedParserOn(registry, func(s string) (customType, error) {
+		return customType("parsed:" + s), nil
+	})
+
+	t.Setenv("CUSTOM_VAR", "value")
+	env := New(WithRegistry(registry))
+
+	_ = env.Var("CUSTOM_VAR").NewString()
+	err := env.Parse()
+	assert.Error(t, err) // No string parser in empty registry
+}
+
+func TestGenvWithDefaultRegistry(t *testing.T) {
+	t.Setenv("TEST_VAR", "hello")
+	env := New()
+	got := env.Var("TEST_VAR").NewString()
+	err := env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, "hello", *got)
+}
+
+func TestRegistryIsolation(t *testing.T) {
+	registry1 := NewRegistry()
+	registry2 := NewRegistry()
+
+	type customType1 string
+	type customType2 string
+
+	RegisterTypedParserOn(registry1, func(s string) (customType1, error) {
+		return customType1("registry1:" + s), nil
+	})
+
+	RegisterTypedParserOn(registry2, func(s string) (customType2, error) {
+		return customType2("registry2:" + s), nil
+	})
+
+	var zero1 customType1
+	var zero2 customType2
+
+	_, exists1in1 := registry1.get(reflect.TypeOf(zero1))
+	_, exists2in1 := registry1.get(reflect.TypeOf(zero2))
+	_, exists1in2 := registry2.get(reflect.TypeOf(zero1))
+	_, exists2in2 := registry2.get(reflect.TypeOf(zero2))
+
+	assert.True(t, exists1in1)  // registry1 has customType1
+	assert.False(t, exists2in1) // registry1 doesn't have customType2
+	assert.False(t, exists1in2) // registry2 doesn't have customType1
+	assert.True(t, exists2in2)  // registry2 has customType2
+}
+
+// Extended Registry API Tests
+
+func TestParserRegistryDuplicateRegistration(t *testing.T) {
+	registry := NewRegistry()
+	type testType string
+
+	RegisterTypedParserOn(registry, func(s string) (testType, error) {
+		return testType("first:" + s), nil
+	})
+
+	assert.Panics(t, func() {
+		RegisterTypedParserOn(registry, func(s string) (testType, error) {
+			return testType("second:" + s), nil
+		})
+	})
+}
+
+
+func TestRegistryCloneBehavior(t *testing.T) {
+	registry := NewRegistry()
+	type cloneTestType string
+	RegisterTypedParserOn(registry, func(s string) (cloneTestType, error) {
+		return cloneTestType("original:" + s), nil
+	})
+
+	env := New(WithRegistry(registry))
+
+	clonedEnv := env.Clone()
+	assert.Equal(t, env.registry, clonedEnv.registry)
+
+	var zero cloneTestType
+	parser, exists := clonedEnv.registry.get(reflect.TypeOf(zero))
+	assert.True(t, exists)
+
+	result, err := parser.Parse("test")
+	assert.NoError(t, err)
+	assert.Equal(t, cloneTestType("original:test"), result)
+}
+
+func TestRegistryReflectionAPI(t *testing.T) {
+	registry := NewRegistry()
+	type reflectTestType string
+
+	var zero reflectTestType
+	targetType := reflect.TypeOf(zero)
+	registry.RegisterParseFunc(targetType, func(s string) (any, error) {
+		return reflectTestType("reflect:" + s), nil
+	})
+
+	parser, exists := registry.get(targetType)
+	assert.True(t, exists)
+	assert.Equal(t, targetType, parser.TargetType())
+	assert.Equal(t, targetType.String(), parser.TypeName())
+
+	result, err := parser.Parse("test")
+	assert.NoError(t, err)
+	assert.Equal(t, reflectTestType("reflect:test"), result)
+}
+
+func TestRegistryEmptyRegistryWithBuiltinTypes(t *testing.T) {
+	emptyRegistry := NewRegistry()
+	t.Setenv("TEST_VAR", "hello")
+	env := New(WithRegistry(emptyRegistry))
+
+	_ = env.Var("TEST_VAR").NewString()
+	err := env.Parse()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no parser registered for type string")
+}
+
+func TestRegistryWithTime(t *testing.T) {
+	registry := NewDefaultRegistry()
+	var zero time.Time
+	parser, exists := registry.get(reflect.TypeOf(zero))
+	assert.True(t, exists)
+
+	timeStr := "2023-01-01T12:00:00Z"
+	result, err := parser.Parse(timeStr)
+	assert.NoError(t, err)
+	expected, _ := time.Parse(time.RFC3339, timeStr)
+	assert.Equal(t, expected, result)
+}
+
+// Custom Type Integration Tests
+
+func TestCustomTypeEndToEnd(t *testing.T) {
+	type UserID string
+
+	registry := NewDefaultRegistry()
+	RegisterTypedParserOn(registry, func(s string) (UserID, error) {
+		if s == "" {
+			return "", errors.New("UserID cannot be empty")
+		}
+		if !strings.HasPrefix(s, "user_") {
+			return UserID("user_" + s), nil
+		}
+		return UserID(s), nil
+	})
+
+	t.Setenv("USER_ID", "12345")
+	env := New(WithRegistry(registry))
+	var userID UserID
+	Type(env.Var("USER_ID"), &userID)
+	err := env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, UserID("user_12345"), userID)
+
+	t.Setenv("USER_ID_2", "user_98765")
+	var userID2 UserID
+	Type(env.Var("USER_ID_2"), &userID2)
+	err = env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, UserID("user_98765"), userID2)
+
+	t.Setenv("USER_ID_EMPTY", "")
+	var userID3 UserID
+	Type(env.Var("USER_ID_EMPTY"), &userID3)
+	err = env.Parse()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "environment variable is empty")
+}
+
+func TestCustomTypeWithNewTypePattern(t *testing.T) {
+	type Department string
+
+	registry := NewDefaultRegistry()
+	RegisterTypedParserOn(registry, func(s string) (Department, error) {
+		validDepts := []string{"engineering", "marketing", "sales", "hr"}
+		dept := strings.ToLower(strings.TrimSpace(s))
+		for _, valid := range validDepts {
+			if dept == valid {
+				return Department(dept), nil
+			}
+		}
+		return "", fmt.Errorf("invalid department: %s", s)
+	})
+
+	t.Setenv("DEPARTMENT", "Engineering")
+	env := New(WithRegistry(registry))
+	dept := NewType[Department](env.Var("DEPARTMENT"))
+	err := env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, Department("engineering"), *dept)
+
+	t.Setenv("INVALID_DEPT", "finance")
+	invalidDept := NewType[Department](env.Var("INVALID_DEPT"))
+	err = env.Parse()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid department: finance")
+	_ = invalidDept // Use variable to avoid unused warning
+}
+
+// Custom Type Slice Tests
+
+func TestCustomTypeSlices(t *testing.T) {
+	type Color string
+
+	registry := NewDefaultRegistry()
+	RegisterTypedParserOn(registry, func(s string) (Color, error) {
+		validColors := []string{"red", "green", "blue", "yellow"}
+		color := strings.ToLower(strings.TrimSpace(s))
+		for _, valid := range validColors {
+			if color == valid {
+				return Color(color), nil
+			}
+		}
+		return "", fmt.Errorf("invalid color: %s", s)
+	})
+
+	t.Setenv("COLORS", "red,GREEN, Blue ")
+	env := New(WithRegistry(registry))
+	colors := NewTypes[Color](env.Var("COLORS"))
+	err := env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, []Color{"red", "green", "blue"}, *colors)
+
+	t.Setenv("INVALID_COLORS", "red,purple,blue")
+	invalidColors := NewTypes[Color](env.Var("INVALID_COLORS"))
+	err = env.Parse()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid color: purple")
+	_ = invalidColors
+
+	t.Setenv("EMPTY_COLORS", "")
+	emptyColors := NewTypes[Color](env.Var("EMPTY_COLORS").Optional())
+	err = env.Parse()
+	assert.NoError(t, err)
+	assert.NotNil(t, emptyColors)
+	assert.Len(t, *emptyColors, 0)
+}
+
+func TestCustomTypeSlicesWithCustomDelimiter(t *testing.T) {
+	type Priority int
+
+	// Create registry with Priority parser
+	registry := NewDefaultRegistry()
+	RegisterTypedParserOn(registry, func(s string) (Priority, error) {
+		switch strings.ToLower(s) {
+		case "low":
+			return Priority(1), nil
+		case "medium":
+			return Priority(2), nil
+		case "high":
+			return Priority(3), nil
+		case "critical":
+			return Priority(4), nil
+		default:
+			return Priority(0), fmt.Errorf("invalid priority: %s", s)
+		}
+	})
+
+	t.Setenv("PRIORITIES", "low|medium|high")
+	env := New(WithRegistry(registry), WithSplitKey("|"))
+	priorities := NewTypes[Priority](env.Var("PRIORITIES"))
+	err := env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, []Priority{1, 2, 3}, *priorities)
+}
+
+// Custom Type Optional and Default Tests
+
+func TestCustomTypeOptional(t *testing.T) {
+	type Status string
+
+	registry := NewDefaultRegistry()
+	RegisterTypedParserOn(registry, func(s string) (Status, error) {
+		if s == "" {
+			return "", errors.New("status cannot be empty")
+		}
+		return Status(strings.ToLower(s)), nil
+	})
+
+	env := New(WithRegistry(registry))
+	status := NewType[Status](env.Var("MISSING_STATUS").Optional())
+	err := env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, Status(""), *status) // Zero value
+
+	requiredStatus := NewType[Status](env.Var("MISSING_REQUIRED_STATUS"))
+	err = env.Parse()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "environment variable is empty or unset")
+	_ = requiredStatus
+}
+
+func TestCustomTypeWithDefault(t *testing.T) {
+	type Environment string
+
+	registry := NewDefaultRegistry()
+	RegisterTypedParserOn(registry, func(s string) (Environment, error) {
+		validEnvs := []string{"development", "staging", "production"}
+		env := strings.ToLower(strings.TrimSpace(s))
+		for _, valid := range validEnvs {
+			if env == valid {
+				return Environment(env), nil
+			}
+		}
+		return "", fmt.Errorf("invalid environment: %s", s)
+	})
+
+	env := New(
+		WithRegistry(registry),
+		WithAllowDefault(func(*Genv) (bool, error) { return true, nil }),
+	)
+	environment := NewType[Environment](
+		env.Var("APP_ENV").Default("development"),
+	)
+	err := env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, Environment("development"), *environment)
+
+	t.Setenv("EXPLICIT_ENV", "production")
+	explicitEnv := NewType[Environment](
+		env.Var("EXPLICIT_ENV").Default("development"),
+	)
+	err = env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, Environment("production"), *explicitEnv)
+}
+
+func TestCustomTypeOptionalWithDefault(t *testing.T) {
+	type LogLevel string
+
+	registry := NewDefaultRegistry()
+	RegisterTypedParserOn(registry, func(s string) (LogLevel, error) {
+		level := strings.ToUpper(strings.TrimSpace(s))
+		switch level {
+		case "DEBUG", "INFO", "WARN", "ERROR":
+			return LogLevel(level), nil
+		default:
+			return "", fmt.Errorf("invalid log level: %s", s)
+		}
+	})
+
+	env := New(
+		WithRegistry(registry),
+		WithAllowDefault(func(*Genv) (bool, error) { return true, nil }),
+	)
+	logLevel := NewType[LogLevel](
+		env.Var("LOG_LEVEL").
+			Default("INFO").
+			Optional(),
+	)
+	err := env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, LogLevel("INFO"), *logLevel)
+
+	t.Setenv("INVALID_LOG_LEVEL", "INVALID")
+	invalidLogLevel := NewType[LogLevel](
+		env.Var("INVALID_LOG_LEVEL").
+			Default("WARN").
+			Optional(),
+	)
+	err = env.Parse()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid log level: INVALID")
+	_ = invalidLogLevel
+}
+
+// Registry Isolation and Performance Tests
+
+func TestRegistryConcurrentAccess(t *testing.T) {
+	registry1 := NewDefaultRegistry()
+	registry2 := NewDefaultRegistry()
+
+	type ConcurrentType1 string
+	type ConcurrentType2 string
+
+	RegisterTypedParserOn(registry1, func(s string) (ConcurrentType1, error) {
+		return ConcurrentType1("reg1:" + s), nil
+	})
+
+	RegisterTypedParserOn(registry2, func(s string) (ConcurrentType2, error) {
+		return ConcurrentType2("reg2:" + s), nil
+	})
+
+	const numGoroutines = 100
+	results1 := make(chan string, numGoroutines)
+	results2 := make(chan string, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			env := New(WithRegistry(registry1))
+			t.Setenv(fmt.Sprintf("CONCURRENT_VAR1_%d", id), fmt.Sprintf("value%d", id))
+			result := NewType[ConcurrentType1](env.Var(fmt.Sprintf("CONCURRENT_VAR1_%d", id)))
+			err := env.Parse()
+			if err != nil {
+				results1 <- "error"
+			} else {
+				results1 <- string(*result)
+			}
+		}(i)
+	}
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			env := New(WithRegistry(registry2))
+			t.Setenv(fmt.Sprintf("CONCURRENT_VAR2_%d", id), fmt.Sprintf("value%d", id))
+			result := NewType[ConcurrentType2](env.Var(fmt.Sprintf("CONCURRENT_VAR2_%d", id)))
+			err := env.Parse()
+			if err != nil {
+				results2 <- "error"
+			} else {
+				results2 <- string(*result)
+			}
+		}(i)
+	}
+
+	for i := 0; i < numGoroutines; i++ {
+		result1 := <-results1
+		result2 := <-results2
+		assert.Contains(t, result1, "reg1:value")
+		assert.Contains(t, result2, "reg2:value")
+	}
+}
+
+func TestRegistryMemoryIsolation(t *testing.T) {
+	type IsolationType string
+
+	registry1 := NewRegistry()
+	registry2 := NewRegistry()
+	registry3 := NewRegistry()
+
+	RegisterTypedParserOn(registry1, func(s string) (IsolationType, error) {
+		return IsolationType("registry1:" + s), nil
+	})
+
+	RegisterTypedParserOn(registry2, func(s string) (IsolationType, error) {
+		return IsolationType("registry2:" + s), nil
+	})
+
+	RegisterTypedParserOn(registry3, func(s string) (IsolationType, error) {
+		return IsolationType("registry3:" + s), nil
+	})
+
+	var zero IsolationType
+	targetType := reflect.TypeOf(zero)
+
+	parser1, exists1 := registry1.get(targetType)
+	parser2, exists2 := registry2.get(targetType)
+	parser3, exists3 := registry3.get(targetType)
+
+	assert.True(t, exists1)
+	assert.True(t, exists2)
+	assert.True(t, exists3)
+
+	result1, _ := parser1.Parse("test")
+	result2, _ := parser2.Parse("test")
+	result3, _ := parser3.Parse("test")
+
+	assert.Equal(t, IsolationType("registry1:test"), result1)
+	assert.Equal(t, IsolationType("registry2:test"), result2)
+	assert.Equal(t, IsolationType("registry3:test"), result3)
+}
+
+// Advanced Scenario Tests
+
+func TestMixedBuiltinAndCustomTypes(t *testing.T) {
+	type ServiceConfig struct {
+		Port        int
+		Host        string
+		ServiceName string
+		Debug       bool
+		Timeout     time.Duration
+	}
+
+	type Duration time.Duration
+	type ServiceName string
+
+	registry := NewDefaultRegistry()
+	
+	RegisterTypedParserOn(registry, func(s string) (Duration, error) {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return Duration(0), err
+		}
+		return Duration(d), nil
+	})
+
+	RegisterTypedParserOn(registry, func(s string) (ServiceName, error) {
+		if len(s) < 3 {
+			return "", errors.New("service name must be at least 3 characters")
+		}
+		if !strings.HasPrefix(s, "svc-") {
+			return ServiceName("svc-" + s), nil
+		}
+		return ServiceName(s), nil
+	})
+
+	t.Setenv("SERVICE_PORT", "8080")
+	t.Setenv("SERVICE_HOST", "localhost")
+	t.Setenv("SERVICE_NAME", "api")
+	t.Setenv("SERVICE_DEBUG", "true")
+	t.Setenv("SERVICE_TIMEOUT", "30s")
+
+	env := New(WithRegistry(registry))
+	var config ServiceConfig
+
+	env.Var("SERVICE_PORT").Int(&config.Port)
+	env.Var("SERVICE_HOST").String(&config.Host)
+	Type(env.Var("SERVICE_NAME"), (*ServiceName)(&config.ServiceName))
+	env.Var("SERVICE_DEBUG").Bool(&config.Debug)
+	Type(env.Var("SERVICE_TIMEOUT"), (*Duration)(&config.Timeout))
+
+	err := env.Parse()
+	assert.NoError(t, err)
+
+	assert.Equal(t, 8080, config.Port)
+	assert.Equal(t, "localhost", config.Host)
+	assert.Equal(t, "svc-api", config.ServiceName)
+	assert.Equal(t, true, config.Debug)
+	assert.Equal(t, time.Duration(30*time.Second), time.Duration(config.Timeout))
+}
+
+func TestRegistryMigrationPattern(t *testing.T) {
+	type UserID string
+	type LegacyUserID string
+
+	
+	legacyRegistry := NewDefaultRegistry()
+	RegisterTypedParserOn(legacyRegistry, func(s string) (LegacyUserID, error) {
+		return LegacyUserID("legacy:" + s), nil
+	})
+
+	newRegistry := NewDefaultRegistry()
+	RegisterTypedParserOn(newRegistry, func(s string) (UserID, error) {
+		return UserID("new:" + s), nil
+	})
+
+	t.Setenv("LEGACY_USER", "user123")
+	legacyEnv := New(WithRegistry(legacyRegistry))
+	var legacyResult LegacyUserID
+	Type(legacyEnv.Var("LEGACY_USER"), &legacyResult)
+	err := legacyEnv.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, LegacyUserID("legacy:user123"), legacyResult)
+
+	t.Setenv("NEW_USER", "user456")
+	newEnv := New(WithRegistry(newRegistry))
+	var newResult UserID
+	Type(newEnv.Var("NEW_USER"), &newResult)
+	err = newEnv.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, UserID("new:user456"), newResult)
+
+	assert.NotEqual(t, string(legacyResult), string(newResult))
+	
+	t.Setenv("WRONG_TYPE", "test")
+	wrongEnv := New(WithRegistry(newRegistry))
+	var wrongResult LegacyUserID
+	Type(wrongEnv.Var("WRONG_TYPE"), &wrongResult)
+	err = wrongEnv.Parse()
+	assert.Error(t, err) // Should fail because LegacyUserID not registered in newRegistry
+	assert.Contains(t, err.Error(), "no parser registered for type")
+}
+
+func TestComplexValidationScenarios(t *testing.T) {
+	type EmailAddress string
+	type PhoneNumber string
+	type PersonID string
+
+	registry := NewDefaultRegistry()
+
+	RegisterTypedParserOn(registry, func(s string) (EmailAddress, error) {
+		if !strings.Contains(s, "@") {
+			return "", errors.New("invalid email format")
+		}
+		if !strings.Contains(s, ".") {
+			return "", errors.New("email missing domain")
+		}
+		return EmailAddress(strings.ToLower(s)), nil
+	})
+
+	RegisterTypedParserOn(registry, func(s string) (PhoneNumber, error) {
+		cleaned := strings.ReplaceAll(s, "-", "")
+		cleaned = strings.ReplaceAll(cleaned, " ", "")
+		if len(cleaned) < 10 {
+			return "", errors.New("phone number too short")
+		}
+		return PhoneNumber(cleaned), nil
+	})
+
+	RegisterTypedParserOn(registry, func(s string) (PersonID, error) {
+		if len(s) < 5 {
+			return "", errors.New("person ID too short")
+		}
+		if !strings.HasPrefix(s, "P") && !strings.HasPrefix(s, "E") {
+			return "", errors.New("person ID must start with P or E")
+		}
+		return PersonID(strings.ToUpper(s)), nil
+	})
+
+	testCases := []struct {
+		name        string
+		email       string
+		phone       string
+		personID    string
+		expectError bool
+		errorText   string
+	}{
+		{
+			name:        "All valid",
+			email:       "test@example.com",
+			phone:       "123-456-7890",
+			personID:    "P12345",
+			expectError: false,
+		},
+		{
+			name:        "Invalid email",
+			email:       "invalid-email",
+			phone:       "123-456-7890", 
+			personID:    "P12345",
+			expectError: true,
+			errorText:   "invalid email format",
+		},
+		{
+			name:        "Invalid phone",
+			email:       "test@example.com",
+			phone:       "123",
+			personID:    "P12345",
+			expectError: true,
+			errorText:   "phone number too short",
+		},
+		{
+			name:        "Invalid person ID",
+			email:       "test@example.com",
+			phone:       "123-456-7890",
+			personID:    "X12345",
+			expectError: true,
+			errorText:   "person ID must start with P or E",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("TEST_EMAIL", tc.email)
+			t.Setenv("TEST_PHONE", tc.phone)
+			t.Setenv("TEST_PERSON_ID", tc.personID)
+
+			env := New(WithRegistry(registry))
+			email := NewType[EmailAddress](env.Var("TEST_EMAIL"))
+			phone := NewType[PhoneNumber](env.Var("TEST_PHONE"))
+			personID := NewType[PersonID](env.Var("TEST_PERSON_ID"))
+
+			err := env.Parse()
+
+			if tc.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorText)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, EmailAddress("test@example.com"), *email)
+				assert.Equal(t, PhoneNumber("1234567890"), *phone)
+				assert.Equal(t, PersonID("P12345"), *personID)
+			}
+		})
+	}
 }

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -16,6 +18,7 @@ type (
 		allowDefault allowFunc
 		splitKey     string
 		varFuncs     []func() error
+		registry     *ParserRegistry
 	}
 
 	allowFunc func(*Genv) (bool, error)
@@ -34,6 +37,7 @@ func New(opts ...Opt[Genv]) *Genv {
 			return *allow, nil
 		},
 		splitKey: ",",
+		registry: NewDefaultRegistry(),
 	}
 
 	for _, opt := range opts {
@@ -51,6 +55,12 @@ func WithSplitKey(splitKey string) Opt[Genv] {
 func WithAllowDefault(allowFn allowFunc) Opt[Genv] {
 	return func(genv *Genv) {
 		genv.allowDefault = allowFn
+	}
+}
+
+func WithRegistry(registry *ParserRegistry) Opt[Genv] {
+	return func(genv *Genv) {
+		genv.registry = registry
 	}
 }
 
@@ -84,6 +94,7 @@ func (genv *Genv) Clone() *Genv {
 	clone := New(
 		WithAllowDefault(genv.allowDefault),
 		WithSplitKey(genv.splitKey),
+		WithRegistry(genv.registry),
 	)
 	return clone
 }
@@ -116,6 +127,21 @@ type fallback struct {
 	value string
 }
 
+func (fb *fallback) resolve(genv *Genv) (string, error) {
+	if fb == nil || fb.allow == nil {
+		return "", nil
+	}
+
+	isAllowed, err := fb.allow(genv)
+	if err != nil {
+		return "", fmt.Errorf("resolve fallback allow: %w", err)
+	} else if !isAllowed {
+		return "", nil
+	}
+
+	return fb.value, nil
+}
+
 func (v *Var) Optional() *Var {
 	v.optional = true
 	return v
@@ -142,266 +168,118 @@ func (genv *Genv) WithSplitKey(splitKey string) Opt[Var] {
 }
 
 func (v *Var) String(s *string) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseString(s) })
-	return v
+	return Type(v, s)
 }
 
 func (v *Var) NewString() *string {
-	s := new(string)
-	v.String(s)
-	return s
+	return NewType[string](v)
 }
 
 func (v *Var) Strings(s *[]string, opts ...Opt[Var]) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, s, func(ev *Var, result *string) error {
-			return ev.parseString(result)
-		}, opts...)
-	})
-	return v
+	return Types(v, s, opts...)
 }
 
 func (v *Var) NewStrings(opts ...Opt[Var]) *[]string {
-	s := new([]string)
-	v.Strings(s, opts...)
-	return s
-}
-
-func (v *Var) parseString(s *string) (err error) {
-	*s, err = parse(v, func(value string) (string, error) {
-		return value, nil
-	})
-	if err != nil {
-		err = fmt.Errorf("parse string: %w", err)
-	}
-	return
+	return NewTypes[string](v, opts...)
 }
 
 func (v *Var) Bool(b *bool) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseBool(b) })
-	return v
+	return Type(v, b)
 }
 
 func (v *Var) NewBool() *bool {
-	b := new(bool)
-	v.Bool(b)
-	return b
+	return NewType[bool](v)
 }
 
 func (v *Var) Bools(b *[]bool, opts ...Opt[Var]) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, b, func(ev *Var, result *bool) error {
-			return ev.parseBool(result)
-		}, opts...)
-	})
-	return v
+	return Types(v, b, opts...)
 }
 
 func (v *Var) NewBools(opts ...Opt[Var]) *[]bool {
-	b := new([]bool)
-	v.Bools(b, opts...)
-	return b
-}
-
-func (v *Var) parseBool(b *bool) (err error) {
-	*b, err = parse(v, strconv.ParseBool)
-	if err != nil {
-		err = fmt.Errorf("parse bool: %w", err)
-	}
-	return
+	return NewTypes[bool](v, opts...)
 }
 
 func (v *Var) Int(i *int) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseInt(i) })
-	return v
+	return Type(v, i)
 }
 
 func (v *Var) NewInt() *int {
-	i := new(int)
-	v.Int(i)
-	return i
+	return NewType[int](v)
 }
 
 func (v *Var) Ints(i *[]int, opts ...Opt[Var]) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, i, func(ev *Var, result *int) error {
-			return ev.parseInt(result)
-		}, opts...)
-	})
-	return v
+	return Types(v, i, opts...)
 }
 
 func (v *Var) NewInts(opts ...Opt[Var]) *[]int {
-	i := new([]int)
-	v.Ints(i, opts...)
-	return i
-}
-
-func (v *Var) parseInt(i *int) (err error) {
-	*i, err = parse(v, strconv.Atoi)
-	if err != nil {
-		err = fmt.Errorf("parse int: %w", err)
-	}
-	return
+	return NewTypes[int](v, opts...)
 }
 
 func (v *Var) Float64(f *float64) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseFloat(f) })
-	return v
+	return Type(v, f)
 }
 
 func (v *Var) NewFloat64() *float64 {
-	f := new(float64)
-	v.Float64(f)
-	return f
+	return NewType[float64](v)
 }
 
 func (v *Var) Float64s(f *[]float64, opts ...Opt[Var]) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, f, func(ev *Var, result *float64) error {
-			return ev.parseFloat(result)
-		}, opts...)
-	})
-	return v
+	return Types(v, f, opts...)
 }
 
 func (v *Var) NewFloat64s(opts ...Opt[Var]) *[]float64 {
-	f := new([]float64)
-	v.Float64s(f, opts...)
-	return f
-}
-
-func (v *Var) parseFloat(f *float64) (err error) {
-	*f, err = parse(v, func(s string) (float64, error) {
-		return strconv.ParseFloat(s, 64)
-	})
-	if err != nil {
-		err = fmt.Errorf("parse float64: %w", err)
-	}
-	return
+	return NewTypes[float64](v, opts...)
 }
 
 func (v *Var) URL(u *url.URL) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseURL(u) })
-	return v
+	return Type(v, u)
 }
 
 func (v *Var) NewURL() *url.URL {
-	u := new(url.URL)
-	v.URL(u)
-	return u
+	return NewType[url.URL](v)
 }
 
 func (v *Var) URLs(u *[]url.URL, opts ...Opt[Var]) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, u, func(ev *Var, result *url.URL) error {
-			return ev.parseURL(result)
-		}, opts...)
-	})
-	return v
+	return Types(v, u, opts...)
 }
 
 func (v *Var) NewURLs(opts ...Opt[Var]) *[]url.URL {
-	u := new([]url.URL)
-	v.URLs(u, opts...)
-	return u
-}
-
-func (v *Var) parseURL(u *url.URL) (err error) {
-	*u, err = parse(v, func(s string) (url.URL, error) {
-		result, err := url.Parse(s)
-		if err != nil {
-			return url.URL{}, err
-		}
-		return *result, nil
-	})
-	if err != nil {
-		return fmt.Errorf("parse url: %w", err)
-	}
-	return nil
+	return NewTypes[url.URL](v, opts...)
 }
 
 func (v *Var) UUID(id *uuid.UUID) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error { return v.parseUUID(id) })
-	return v
+	return Type(v, id)
 }
 
 func (v *Var) NewUUID() *uuid.UUID {
-	id := new(uuid.UUID)
-	v.UUID(id)
-	return id
+	return NewType[uuid.UUID](v)
 }
 
 func (v *Var) UUIDs(id *[]uuid.UUID, opts ...Opt[Var]) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, id, func(ev *Var, result *uuid.UUID) error {
-			return ev.parseUUID(result)
-		}, opts...)
-	})
-	return v
+	return Types(v, id, opts...)
 }
 
 func (v *Var) NewUUIDs(opts ...Opt[Var]) *[]uuid.UUID {
-	id := new([]uuid.UUID)
-	v.UUIDs(id, opts...)
-	return id
+	return NewTypes[uuid.UUID](v, opts...)
 }
 
-func (v *Var) parseUUID(id *uuid.UUID) (err error) {
-	*id, err = parse(v, uuid.Parse)
+func (v *Var) resolveValue() (string, error) {
+	if v.found {
+		return v.value, nil
+	}
+
+	fb, err := v.fb.resolve(v.genv)
 	if err != nil {
-		return fmt.Errorf("parse uuid: %w", err)
+		return "", fmt.Errorf("resolve fallback: %w", err)
 	}
-	return nil
-}
-
-func (v *Var) parseValue() (string, error) {
-	if v.value == "" && v.fb != nil && v.fb.allow != nil {
-		allow, err := v.fb.allow(v.genv)
-		if err != nil {
-			return "", fmt.Errorf(errFmtInvalidVar, v.key, err)
-		}
-		if allow {
-			return v.fb.value, nil
-		}
-	}
-	return v.value, nil
+	return fb, nil
 }
 
 const errFmtInvalidVar = "%s is invalid: %w"
 
-func parse[T any](ev *Var, fn func(string) (T, error)) (T, error) {
-	var (
-		result T
-		err    error
-	)
-
-	value, err := ev.parseValue()
-	if err != nil {
-		return result, fmt.Errorf(errFmtInvalidVar, ev.key, err)
-	}
-
-	if !ev.optional && value == "" {
-		return result, fmt.Errorf(errFmtInvalidVar, ev.key, ErrRequiredEnvironmentVariable)
-	}
-
-	if value == "" {
-		// If validation succeeded, then the value being empty means it was
-		// optional (or just an empty string is the desired output).
-		// In that case, use the zero value.
-		return result, nil
-	}
-
-	result, err = fn(value)
-	if err != nil {
-		return result, fmt.Errorf(errFmtInvalidVar, ev.key, err)
-	}
-	return result, nil
-}
-
 var ErrRequiredEnvironmentVariable = errors.New("environment variable is empty or unset")
 
-func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...Opt[Var]) error {
+func parseMany[T any](ev *Var, result *[]T, opts ...Opt[Var]) error {
 	for _, opt := range opts {
 		opt(ev)
 	}
@@ -410,7 +288,7 @@ func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...Opt
 		return errors.New("split key cannot be empty")
 	}
 
-	value, err := ev.parseValue()
+	value, err := ev.resolveValue()
 	if err != nil {
 		return fmt.Errorf(errFmtInvalidVar, ev.key, err)
 	}
@@ -424,7 +302,7 @@ func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...Opt
 		vars = append(vars, Var{
 			key:          ev.key,
 			value:        val,
-			found:        ev.found,
+			found:        true,
 			optional:     ev.optional,
 			allowDefault: ev.allowDefault,
 			genv:         ev.genv,
@@ -436,13 +314,202 @@ func parseMany[T any](ev *Var, result *[]T, fn func(*Var, *T) error, opts ...Opt
 
 	for _, ev := range vars {
 		v := new(T)
-		err := fn(&ev, v)
+		err := assignValue(&ev, v)
 		if err != nil {
 			return fmt.Errorf(errFmtInvalidVar, ev.key, err)
 		}
 		*result = append(*result, *v)
 	}
 	return nil
+}
+
+// assignValue parses an environment variable into the target. The assignment only occurs
+// if no errors occurred during parsing.
+func assignValue[T any](ev *Var, target *T) error {
+	value, err := parseOne[T](ev)
+	if err != nil {
+		return fmt.Errorf("parseOne: %w", err)
+	}
+
+	typedResult, ok := value.(T)
+	if !ok {
+		return fmt.Errorf("parser returned incorrect type: expected %T, got %T", *target, value)
+	}
+	*target = typedResult
+	return nil
+}
+
+// Parser defines the strategy for parsing a string into any type using reflection
+type Parser struct {
+	ParseFn      func(string) (any, error)
+	TargetTypeFn func() reflect.Type
+	TypeNameFn   func() string
+}
+
+func (p Parser) Parse(value string) (any, error) {
+	return p.ParseFn(value)
+}
+
+func (p Parser) TargetType() reflect.Type {
+	return p.TargetTypeFn()
+}
+
+func (p Parser) TypeName() string {
+	return p.TypeNameFn()
+}
+
+// newParser creates a new parser from a type and parsing function
+func newParser(targetType reflect.Type, parseFn func(string) (any, error)) Parser {
+	return Parser{
+		ParseFn:      parseFn,
+		TargetTypeFn: func() reflect.Type { return targetType },
+		TypeNameFn:   func() string { return targetType.String() },
+	}
+}
+
+// ParserRegistry manages parsers for different types using reflection
+type ParserRegistry struct {
+	parsers map[reflect.Type]Parser
+}
+
+func newParserRegistry() *ParserRegistry {
+	return &ParserRegistry{
+		parsers: make(map[reflect.Type]Parser),
+	}
+}
+
+func (r *ParserRegistry) register(targetType reflect.Type, parser Parser) {
+	if _, exists := r.parsers[targetType]; exists {
+		panic(fmt.Sprintf("parser for type %s already registered", targetType))
+	}
+	r.parsers[targetType] = parser
+}
+
+func (r *ParserRegistry) get(targetType reflect.Type) (Parser, bool) {
+	parser, exists := r.parsers[targetType]
+	return parser, exists
+}
+
+// RegisterTypedParser registers a parser with type safety on a specific registry
+func RegisterTypedParserOn[T any](registry *ParserRegistry, parseFn func(string) (T, error)) {
+	var zero T
+	targetType := reflect.TypeOf(zero)
+
+	wrappedFn := func(s string) (any, error) {
+		result, err := parseFn(s)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+
+	registry.RegisterParseFunc(targetType, wrappedFn)
+}
+
+// RegisterParseFunc registers a parser using pure reflection (method API)
+func (r *ParserRegistry) RegisterParseFunc(targetType reflect.Type, parseFn func(string) (any, error)) {
+	parser := newParser(targetType, parseFn)
+	r.register(targetType, parser)
+}
+
+// NewRegistry creates an empty parser registry
+func NewRegistry() *ParserRegistry {
+	return newParserRegistry()
+}
+
+// NewDefaultRegistry creates a parser registry with all built-in parsers
+func NewDefaultRegistry() *ParserRegistry {
+	registry := newParserRegistry()
+
+	RegisterTypedParserOn(registry, func(s string) (string, error) {
+		return s, nil
+	})
+	RegisterTypedParserOn(registry, strconv.ParseBool)
+	RegisterTypedParserOn(registry, strconv.Atoi)
+	RegisterTypedParserOn(registry, func(s string) (float64, error) {
+		return strconv.ParseFloat(s, 64)
+	})
+	RegisterTypedParserOn(registry, func(s string) (url.URL, error) {
+		result, err := url.Parse(s)
+		if err != nil {
+			return url.URL{}, err
+		}
+		return *result, nil
+	})
+	RegisterTypedParserOn(registry, uuid.Parse)
+	RegisterTypedParserOn(registry, func(s string) (time.Time, error) {
+		return time.Parse(time.RFC3339, s)
+	})
+
+	return registry
+}
+
+// getParser retrieves a parser for a specific type from the given registry
+func getParser[T any](registry *ParserRegistry) (Parser, bool) {
+	var zero T
+	targetType := reflect.TypeOf(zero)
+	return registry.get(targetType)
+}
+
+// Type sets the value of a variable of type T using the registered parser
+func Type[T any](v *Var, target *T) *Var {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+		if err := assignValue(v, target); err != nil {
+			return fmt.Errorf("assignValue: %w", err)
+		}
+		return nil
+	})
+	return v
+}
+
+// NewType creates a new variable of type T using the registered parser
+func NewType[T any](v *Var) *T {
+	target := new(T)
+	Type(v, target)
+	return target
+}
+
+// Types sets the value of a slice of type T using the registered parser
+func Types[T any](v *Var, target *[]T, opts ...Opt[Var]) *Var {
+	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+		return parseMany(v, target, opts...)
+	})
+	return v
+}
+
+// NewTypes creates a new slice of type T using the registered parser
+func NewTypes[T any](v *Var, opts ...Opt[Var]) *[]T {
+	target := new([]T)
+	Types(v, target, opts...)
+	return target
+}
+
+// parseOne parses using the reflection-based parser interface
+func parseOne[T any](ev *Var) (any, error) {
+	parser, exists := getParser[T](ev.genv.registry)
+	if !exists {
+		var zero T
+		return nil, fmt.Errorf("no parser registered for type %T", zero)
+	}
+
+	value, err := ev.resolveValue()
+	if err != nil {
+		return nil, fmt.Errorf(errFmtInvalidVar, ev.key, err)
+	}
+
+	if value == "" {
+		if !ev.optional {
+			return nil, fmt.Errorf(errFmtInvalidVar, ev.key, ErrRequiredEnvironmentVariable)
+		}
+		targetType := parser.TargetType()
+		return reflect.Zero(targetType).Interface(), nil
+	}
+
+	result, err := parser.Parse(value)
+	if err != nil {
+		return nil, fmt.Errorf(errFmtInvalidVar, ev.key, err)
+	}
+	return result, nil
 }
 
 type Opt[T any] func(*T)
