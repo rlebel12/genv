@@ -80,114 +80,6 @@ func (genv *Genv) Var(key string, opts ...Opt[Var]) *Var {
 	return ev
 }
 
-// autoType detects the type of target and schedules the appropriate parsing
-func autoType(v *Var, target any) {
-	targetVal := reflect.ValueOf(target)
-	if targetVal.Kind() != reflect.Ptr {
-		panic("Var target must be a pointer")
-	}
-
-	elemType := targetVal.Type().Elem()
-
-	// Check if it's a slice
-	if elemType.Kind() == reflect.Slice {
-		autoTypes(v, target, elemType.Elem())
-	} else {
-		autoSingleType(v, target, elemType)
-	}
-}
-
-// autoSingleType schedules parsing for a single value using reflection
-func autoSingleType(v *Var, target any, elemType reflect.Type) {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return assignValueReflect(v, target, elemType)
-	})
-}
-
-// autoTypes schedules parsing for a slice using reflection
-func autoTypes(v *Var, target any, elemType reflect.Type) {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseManyReflect(v, target, elemType)
-	})
-}
-
-// assignValueReflect parses and assigns a single value using reflection
-func assignValueReflect(v *Var, target any, elemType reflect.Type) error {
-	parser, exists := v.genv.registry.get(elemType)
-	if !exists {
-		return fmt.Errorf("no parser registered for type %s", elemType)
-	}
-
-	value, err := v.resolveValue()
-	if err != nil {
-		return fmt.Errorf(errFmtInvalidVar, v.key, err)
-	}
-
-	if value == "" {
-		if !v.optional {
-			return fmt.Errorf(errFmtInvalidVar, v.key, ErrRequiredEnvironmentVariable)
-		}
-		// Set to zero value
-		reflect.ValueOf(target).Elem().Set(reflect.Zero(elemType))
-		return nil
-	}
-
-	result, err := parser.Parse(value)
-	if err != nil {
-		return fmt.Errorf(errFmtInvalidVar, v.key, err)
-	}
-
-	reflect.ValueOf(target).Elem().Set(reflect.ValueOf(result))
-	return nil
-}
-
-// parseManyReflect parses a slice using reflection
-func parseManyReflect(v *Var, target any, elemType reflect.Type) error {
-	if v.splitKey == "" {
-		return errors.New("split key cannot be empty")
-	}
-
-	value, err := v.resolveValue()
-	if err != nil {
-		return fmt.Errorf(errFmtInvalidVar, v.key, err)
-	}
-
-	split := strings.Split(value, v.splitKey)
-	vars := make([]Var, 0, len(split))
-	for _, val := range split {
-		if val == "" {
-			continue
-		}
-		vars = append(vars, Var{
-			key:          v.key,
-			value:        val,
-			found:        true,
-			optional:     v.optional,
-			allowDefault: v.allowDefault,
-			genv:         v.genv,
-		})
-	}
-	if !v.optional && len(vars) == 0 {
-		return fmt.Errorf(errFmtInvalidVar, v.key, ErrRequiredEnvironmentVariable)
-	}
-
-	// Create a new slice to hold results
-	resultSlice := reflect.MakeSlice(reflect.SliceOf(elemType), 0, len(vars))
-
-	for _, ev := range vars {
-		elemPtr := reflect.New(elemType)
-		err := assignValueReflect(&ev, elemPtr.Interface(), elemType)
-		if err != nil {
-			return fmt.Errorf(errFmtInvalidVar, ev.key, err)
-		}
-		resultSlice = reflect.Append(resultSlice, elemPtr.Elem())
-	}
-
-	// Assign the result slice to the target
-	reflect.ValueOf(target).Elem().Set(resultSlice)
-	return nil
-}
-
 func (genv *Genv) Parse() (err error) {
 	defer func() { genv.varFuncs = nil }()
 	for _, f := range genv.varFuncs {
@@ -248,20 +140,6 @@ func (fb *fallback) resolve(genv *Genv) (string, error) {
 	}
 
 	return fb.value, nil
-}
-
-// To assigns the parsed value to the target pointer, automatically detecting its type.
-// This is a simplified alternative to type-specific methods like String(), Int(), etc.
-// Works with both single values and slices, built-in types and custom types.
-//
-// Examples:
-//   env.Var("PORT").To(&port)                 // Auto-detect type from pointer
-//   env.Var("DEBUG").To(&debug).Optional()    // Still supports fluent API
-//   env.Var("TAGS").To(&tags)                 // Auto-detect slice type
-//   env.Var("USER_ID").To(&userID)            // Works with custom types
-func (v *Var) To(target any) *Var {
-	autoType(v, target)
-	return v
 }
 
 func (v *Var) Optional() *Var {
