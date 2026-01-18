@@ -1372,3 +1372,125 @@ func TestToMethod_ComplexScenario(t *testing.T) {
 	assert.Equal(t, 30.5, cfg.Timeout)
 	assert.Equal(t, []string{"auth", "api", "web"}, cfg.Features)
 }
+
+// Tests for the new VarFunc/Parse API
+func TestVarFuncAPI_Basic(t *testing.T) {
+	t.Setenv("APP_NAME", "TestApp")
+	t.Setenv("PORT", "9000")
+	t.Setenv("DEBUG", "true")
+
+	env := New()
+	var appName string
+	var port int
+	var debug bool
+
+	err := Parse(env,
+		Bind("APP_NAME", &appName),
+		Bind("PORT", &port),
+		Bind("DEBUG", &debug),
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "TestApp", appName)
+	assert.Equal(t, 9000, port)
+	assert.True(t, debug)
+}
+
+func TestVarFuncAPI_WithOptions(t *testing.T) {
+	t.Setenv("PORT", "8080")
+
+	env := New(WithAllowDefault(func(*Genv) (bool, error) { return true, nil }))
+	var port int
+	var name string
+	var timeout float64
+
+	err := Parse(env,
+		Bind("PORT", &port),
+		Bind("NAME", &name).Default("DefaultName"),
+		Bind("TIMEOUT", &timeout).Optional(),
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 8080, port)
+	assert.Equal(t, "DefaultName", name)
+	assert.Equal(t, 0.0, timeout)
+}
+
+func TestVarFuncAPI_Slices(t *testing.T) {
+	t.Setenv("TAGS", "a,b,c")
+	t.Setenv("PORTS", "8080,8081,8082")
+
+	env := New()
+	var tags []string
+	var ports []int
+
+	err := Parse(env,
+		Bind("TAGS", &tags),
+		Bind("PORTS", &ports),
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"a", "b", "c"}, tags)
+	assert.Equal(t, []int{8080, 8081, 8082}, ports)
+}
+
+func TestVarFuncAPI_CustomTypes(t *testing.T) {
+	type UserID string
+
+	registry := NewDefaultRegistry()
+	RegisterTypedParserOn(registry, func(s string) (UserID, error) {
+		return UserID("user_" + s), nil
+	})
+
+	t.Setenv("USER_ID", "12345")
+	t.Setenv("USER_IDS", "1,2,3")
+
+	env := New(WithRegistry(registry))
+	var userID UserID
+	var userIDs []UserID
+
+	err := Parse(env,
+		Bind("USER_ID", &userID),
+		Bind("USER_IDS", &userIDs),
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, UserID("user_12345"), userID)
+	assert.Equal(t, []UserID{"user_1", "user_2", "user_3"}, userIDs)
+}
+
+func TestVarFuncAPI_ComplexScenario(t *testing.T) {
+	type Config struct {
+		AppName  string
+		Port     int
+		Debug    bool
+		Timeout  float64
+		Features []string
+		APIKey   string
+	}
+
+	t.Setenv("APP_NAME", "MyApp")
+	t.Setenv("PORT", "8080")
+	t.Setenv("DEBUG", "true")
+	t.Setenv("FEATURES", "auth,api,web")
+
+	env := New(WithAllowDefault(func(*Genv) (bool, error) { return true, nil }))
+	var cfg Config
+
+	err := Parse(env,
+		Bind("APP_NAME", &cfg.AppName),
+		Bind("PORT", &cfg.Port),
+		Bind("DEBUG", &cfg.Debug),
+		Bind("TIMEOUT", &cfg.Timeout).Default("30.5"),
+		Bind("FEATURES", &cfg.Features),
+		Bind("API_KEY", &cfg.APIKey).Default("default-key").Optional(),
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "MyApp", cfg.AppName)
+	assert.Equal(t, 8080, cfg.Port)
+	assert.True(t, cfg.Debug)
+	assert.Equal(t, 30.5, cfg.Timeout)
+	assert.Equal(t, []string{"auth", "api", "web"}, cfg.Features)
+	assert.Equal(t, "default-key", cfg.APIKey)
+}

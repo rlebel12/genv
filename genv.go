@@ -635,3 +635,55 @@ func parseOne[T any](ev *Var) (any, error) {
 }
 
 type Opt[T any] func(*T)
+
+// VarFunc is a function that registers a variable on a Genv instance.
+// It's returned by the package-level Bind() function and used with Parse().
+type VarFunc func(*Genv) *Var
+
+// Bind creates a VarFunc that will register and parse a variable.
+// The type is automatically detected from the pointer.
+//
+// Example:
+//   err := genv.Parse(env,
+//       genv.Bind("PORT", &port),
+//       genv.Bind("NAME", &name).Default("unnamed"),
+//       genv.Bind("DEBUG", &debug).Optional(),
+//   )
+func Bind(key string, target any) VarFunc {
+	return func(env *Genv) *Var {
+		v := env.Var(key)
+		autoType(v, target)
+		return v
+	}
+}
+
+// Parse registers all variables and parses them in one call.
+// This is the recommended way to use the simplified API.
+func Parse(env *Genv, vars ...VarFunc) error {
+	for _, vf := range vars {
+		vf(env)
+	}
+	return env.Parse()
+}
+
+// wrapVarFunc is a helper to create VarFunc wrapper methods
+func wrapVarFunc(vf VarFunc, fn func(*Var) *Var) VarFunc {
+	return func(env *Genv) *Var {
+		v := vf(env)
+		return fn(v)
+	}
+}
+
+// Default sets the default value for this variable
+func (vf VarFunc) Default(value string, opts ...Opt[fallback]) VarFunc {
+	return wrapVarFunc(vf, func(v *Var) *Var {
+		return v.Default(value, opts...)
+	})
+}
+
+// Optional marks this variable as optional
+func (vf VarFunc) Optional() VarFunc {
+	return wrapVarFunc(vf, func(v *Var) *Var {
+		return v.Optional()
+	})
+}

@@ -13,8 +13,8 @@ import (
 )
 
 func main() {
-	// Example 0: Simplified API (NEW!)
-	slog.Info("=== Simplified API Example ===")
+	// Example 0: Simplified API with Bind/Parse (NEW!)
+	slog.Info("=== Simplified Bind/Parse API Example ===")
 	simplifiedSettings, err := NewSimplifiedSettings()
 	if err != nil {
 		slog.Error("simplified settings", "error", err.Error())
@@ -91,7 +91,7 @@ type SimplifiedSettings struct {
 	Tags        []string
 }
 
-// NewSimplifiedSettings shows the new simplified API using the To() method
+// NewSimplifiedSettings shows the new simplified API using Bind() and Parse()
 // where the type is automatically detected. No need for .String(), .Int(), etc.
 func NewSimplifiedSettings() (SimplifiedSettings, error) {
 	env := genv.New(
@@ -100,15 +100,17 @@ func NewSimplifiedSettings() (SimplifiedSettings, error) {
 
 	var s SimplifiedSettings
 
-	// Simplified API: use To() and the type is auto-detected!
-	env.Var("APP_NAME").To(&s.AppName).Default("MyApp")
-	env.Var("PORT").To(&s.Port).Default("8080")
-	env.Var("DEBUG").To(&s.Debug).Default("false")
-	env.Var("TIMEOUT").To(&s.Timeout).Default("30.5")
-	env.Var("DATABASE_URL").To(&s.DatabaseURL).Default("https://db.example.com")
-	env.Var("TAGS").To(&s.Tags).Default("api,web,production")
-
-	if err := env.Parse(); err != nil {
+	// Simplified API: use Bind() with Parse() and type is auto-detected!
+	// All variables are registered and parsed in one call.
+	err := genv.Parse(env,
+		genv.Bind("APP_NAME", &s.AppName).Default("MyApp"),
+		genv.Bind("PORT", &s.Port).Default("8080"),
+		genv.Bind("DEBUG", &s.Debug).Default("false"),
+		genv.Bind("TIMEOUT", &s.Timeout).Default("30.5"),
+		genv.Bind("DATABASE_URL", &s.DatabaseURL).Default("https://db.example.com"),
+		genv.Bind("TAGS", &s.Tags).Default("api,web,production"),
+	)
+	if err != nil {
 		return SimplifiedSettings{}, fmt.Errorf("parse env: %w", err)
 	}
 	return s, nil
@@ -268,12 +270,13 @@ func NewCustomRegistrySettings() (CustomSettings, error) {
 
 	// Simplified API works with custom types too!
 	// Before: genv.Type(env.Var("CUSTOM_USER_ID").Default("demo123"), &s.UserID)
-	// After:  env.Var("CUSTOM_USER_ID").To(&s.UserID).Default("demo123")
-	env.Var("CUSTOM_USER_ID").To(&s.UserID).Default("demo123")
-	env.Var("CUSTOM_DEPARTMENT").To(&s.Department).Default("engineering")
-	env.Var("CUSTOM_EMAIL").To(&s.ValidatedEmail).Default("demo@example.com")
-
-	if err := env.Parse(); err != nil {
+	// After:  genv.Bind("CUSTOM_USER_ID", &s.UserID).Default("demo123")
+	err := genv.Parse(env,
+		genv.Bind("CUSTOM_USER_ID", &s.UserID).Default("demo123"),
+		genv.Bind("CUSTOM_DEPARTMENT", &s.Department).Default("engineering"),
+		genv.Bind("CUSTOM_EMAIL", &s.ValidatedEmail).Default("demo@example.com"),
+	)
+	if err != nil {
 		return CustomSettings{}, fmt.Errorf("parse custom env: %w", err)
 	}
 
@@ -384,20 +387,13 @@ func NewAdvancedCustomTypeSettings() (AdvancedCustomSettings, error) {
 
 	// Simplified API works with slices and custom types too!
 	// Before: genv.Types(env.Var("TASK_PRIORITIES").Default("medium|high|low"), &s.Priorities)
-	// After:  env.Var("TASK_PRIORITIES").To(&s.Priorities).Default("medium|high|low")
-	env.Var("TASK_PRIORITIES").To(&s.Priorities).Default("medium|high|low")
-
-	// Simplified API for optional custom types
-	// Before: genv.Type(env.Var("SERVICE_NAME").Optional(), &s.OptionalServiceName)
-	// After:  env.Var("SERVICE_NAME").To(&s.OptionalServiceName).Optional()
-	env.Var("SERVICE_NAME").To(&s.OptionalServiceName).Optional()
-
-	// Simplified API for custom types with defaults
-	// Before: genv.Type(env.Var("LOG_LEVEL").Default("INFO"), &s.LogLevel)
-	// After:  env.Var("LOG_LEVEL").To(&s.LogLevel).Default("INFO")
-	env.Var("LOG_LEVEL").To(&s.LogLevel).Default("INFO")
-
-	if err := env.Parse(); err != nil {
+	// After:  genv.Bind("TASK_PRIORITIES", &s.Priorities).Default("medium|high|low")
+	err := genv.Parse(env,
+		genv.Bind("TASK_PRIORITIES", &s.Priorities).Default("medium|high|low"),
+		genv.Bind("SERVICE_NAME", &s.OptionalServiceName).Optional(),
+		genv.Bind("LOG_LEVEL", &s.LogLevel).Default("INFO"),
+	)
+	if err != nil {
 		return AdvancedCustomSettings{}, fmt.Errorf("parse advanced env: %w", err)
 	}
 
