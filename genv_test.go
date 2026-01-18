@@ -442,12 +442,13 @@ func TestNewDefaultRegistry(t *testing.T) {
 }
 
 func TestParserRegistryRegisterTypedParser(t *testing.T) {
-	registry := NewRegistry()
-
 	type customType string
-	RegisterTypedParserOn(registry, func(s string) (customType, error) {
-		return customType("custom:" + s), nil
-	})
+
+	registry := NewRegistry(
+		WithParser(func(s string) (customType, error) {
+			return customType("custom:" + s), nil
+		}),
+	)
 
 	var zero customType
 	targetType := reflect.TypeOf(zero)
@@ -459,31 +460,14 @@ func TestParserRegistryRegisterTypedParser(t *testing.T) {
 	assert.Equal(t, customType("custom:test"), result)
 }
 
-func TestParserRegistryRegisterParseFunc(t *testing.T) {
-	registry := NewRegistry()
-
-	type customType string
-	var zero customType
-	targetType := reflect.TypeOf(zero)
-
-	registry.RegisterParseFunc(targetType, func(s string) (any, error) {
-		return customType("func:" + s), nil
-	})
-
-	parser, exists := registry.get(targetType)
-	assert.True(t, exists)
-
-	result, err := parser.Parse("test")
-	assert.NoError(t, err)
-	assert.Equal(t, customType("func:test"), result)
-}
-
 func TestGenvWithCustomRegistry(t *testing.T) {
-	registry := NewRegistry()
 	type customType string
-	RegisterTypedParserOn(registry, func(s string) (customType, error) {
-		return customType("parsed:" + s), nil
-	})
+
+	registry := NewRegistry(
+		WithParser(func(s string) (customType, error) {
+			return customType("parsed:" + s), nil
+		}),
+	)
 
 	t.Setenv("CUSTOM_VAR", "value")
 	env := New(WithRegistry(registry))
@@ -509,11 +493,11 @@ func TestRegistryIsolation(t *testing.T) {
 	type customType1 string
 	type customType2 string
 
-	RegisterTypedParserOn(registry1, func(s string) (customType1, error) {
+	WithParser(func(s string) (customType1, error) {
 		return customType1("registry1:" + s), nil
 	})
 
-	RegisterTypedParserOn(registry2, func(s string) (customType2, error) {
+	WithParser(func(s string) (customType2, error) {
 		return customType2("registry2:" + s), nil
 	})
 
@@ -537,12 +521,12 @@ func TestParserRegistryDuplicateRegistration(t *testing.T) {
 	registry := NewRegistry()
 	type testType string
 
-	RegisterTypedParserOn(registry, func(s string) (testType, error) {
+	WithParser(func(s string) (testType, error) {
 		return testType("first:" + s), nil
 	})
 
 	assert.Panics(t, func() {
-		RegisterTypedParserOn(registry, func(s string) (testType, error) {
+		WithParser(func(s string) (testType, error) {
 			return testType("second:" + s), nil
 		})
 	})
@@ -552,7 +536,7 @@ func TestParserRegistryDuplicateRegistration(t *testing.T) {
 func TestRegistryCloneBehavior(t *testing.T) {
 	registry := NewRegistry()
 	type cloneTestType string
-	RegisterTypedParserOn(registry, func(s string) (cloneTestType, error) {
+	WithParser(func(s string) (cloneTestType, error) {
 		return cloneTestType("original:" + s), nil
 	})
 
@@ -568,26 +552,6 @@ func TestRegistryCloneBehavior(t *testing.T) {
 	result, err := parser.Parse("test")
 	assert.NoError(t, err)
 	assert.Equal(t, cloneTestType("original:test"), result)
-}
-
-func TestRegistryReflectionAPI(t *testing.T) {
-	registry := NewRegistry()
-	type reflectTestType string
-
-	var zero reflectTestType
-	targetType := reflect.TypeOf(zero)
-	registry.RegisterParseFunc(targetType, func(s string) (any, error) {
-		return reflectTestType("reflect:" + s), nil
-	})
-
-	parser, exists := registry.get(targetType)
-	assert.True(t, exists)
-	assert.Equal(t, targetType, parser.TargetType())
-	assert.Equal(t, targetType.String(), parser.TypeName())
-
-	result, err := parser.Parse("test")
-	assert.NoError(t, err)
-	assert.Equal(t, reflectTestType("reflect:test"), result)
 }
 
 func TestRegistryEmptyRegistryWithBuiltinTypes(t *testing.T) {
@@ -620,7 +584,7 @@ func TestCustomTypeEndToEnd(t *testing.T) {
 	type UserID string
 
 	registry := NewDefaultRegistry()
-	RegisterTypedParserOn(registry, func(s string) (UserID, error) {
+	WithParser(func(s string) (UserID, error) {
 		if s == "" {
 			return "", errors.New("UserID cannot be empty")
 		}
@@ -657,7 +621,7 @@ func TestCustomTypeWithNewTypePattern(t *testing.T) {
 	type Department string
 
 	registry := NewDefaultRegistry()
-	RegisterTypedParserOn(registry, func(s string) (Department, error) {
+	WithParser(func(s string) (Department, error) {
 		validDepts := []string{"engineering", "marketing", "sales", "hr"}
 		dept := strings.ToLower(strings.TrimSpace(s))
 		for _, valid := range validDepts {
@@ -689,7 +653,7 @@ func TestCustomTypeSlices(t *testing.T) {
 	type Color string
 
 	registry := NewDefaultRegistry()
-	RegisterTypedParserOn(registry, func(s string) (Color, error) {
+	WithParser(func(s string) (Color, error) {
 		validColors := []string{"red", "green", "blue", "yellow"}
 		color := strings.ToLower(strings.TrimSpace(s))
 		for _, valid := range validColors {
@@ -727,7 +691,7 @@ func TestCustomTypeSlicesWithCustomDelimiter(t *testing.T) {
 
 	// Create registry with Priority parser
 	registry := NewDefaultRegistry()
-	RegisterTypedParserOn(registry, func(s string) (Priority, error) {
+	WithParser(func(s string) (Priority, error) {
 		switch strings.ToLower(s) {
 		case "low":
 			return Priority(1), nil
@@ -756,7 +720,7 @@ func TestCustomTypeOptional(t *testing.T) {
 	type Status string
 
 	registry := NewDefaultRegistry()
-	RegisterTypedParserOn(registry, func(s string) (Status, error) {
+	WithParser(func(s string) (Status, error) {
 		if s == "" {
 			return "", errors.New("status cannot be empty")
 		}
@@ -780,7 +744,7 @@ func TestCustomTypeWithDefault(t *testing.T) {
 	type Environment string
 
 	registry := NewDefaultRegistry()
-	RegisterTypedParserOn(registry, func(s string) (Environment, error) {
+	WithParser(func(s string) (Environment, error) {
 		validEnvs := []string{"development", "staging", "production"}
 		env := strings.ToLower(strings.TrimSpace(s))
 		for _, valid := range validEnvs {
@@ -815,7 +779,7 @@ func TestCustomTypeOptionalWithDefault(t *testing.T) {
 	type LogLevel string
 
 	registry := NewDefaultRegistry()
-	RegisterTypedParserOn(registry, func(s string) (LogLevel, error) {
+	WithParser(func(s string) (LogLevel, error) {
 		level := strings.ToUpper(strings.TrimSpace(s))
 		switch level {
 		case "DEBUG", "INFO", "WARN", "ERROR":
@@ -859,11 +823,11 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 	type ConcurrentType1 string
 	type ConcurrentType2 string
 
-	RegisterTypedParserOn(registry1, func(s string) (ConcurrentType1, error) {
+	WithParser(func(s string) (ConcurrentType1, error) {
 		return ConcurrentType1("reg1:" + s), nil
 	})
 
-	RegisterTypedParserOn(registry2, func(s string) (ConcurrentType2, error) {
+	WithParser(func(s string) (ConcurrentType2, error) {
 		return ConcurrentType2("reg2:" + s), nil
 	})
 
@@ -914,15 +878,15 @@ func TestRegistryMemoryIsolation(t *testing.T) {
 	registry2 := NewRegistry()
 	registry3 := NewRegistry()
 
-	RegisterTypedParserOn(registry1, func(s string) (IsolationType, error) {
+	WithParser(func(s string) (IsolationType, error) {
 		return IsolationType("registry1:" + s), nil
 	})
 
-	RegisterTypedParserOn(registry2, func(s string) (IsolationType, error) {
+	WithParser(func(s string) (IsolationType, error) {
 		return IsolationType("registry2:" + s), nil
 	})
 
-	RegisterTypedParserOn(registry3, func(s string) (IsolationType, error) {
+	WithParser(func(s string) (IsolationType, error) {
 		return IsolationType("registry3:" + s), nil
 	})
 
@@ -962,7 +926,7 @@ func TestMixedBuiltinAndCustomTypes(t *testing.T) {
 
 	registry := NewDefaultRegistry()
 	
-	RegisterTypedParserOn(registry, func(s string) (Duration, error) {
+	WithParser(func(s string) (Duration, error) {
 		d, err := time.ParseDuration(s)
 		if err != nil {
 			return Duration(0), err
@@ -970,7 +934,7 @@ func TestMixedBuiltinAndCustomTypes(t *testing.T) {
 		return Duration(d), nil
 	})
 
-	RegisterTypedParserOn(registry, func(s string) (ServiceName, error) {
+	WithParser(func(s string) (ServiceName, error) {
 		if len(s) < 3 {
 			return "", errors.New("service name must be at least 3 characters")
 		}
@@ -1011,12 +975,12 @@ func TestRegistryMigrationPattern(t *testing.T) {
 
 	
 	legacyRegistry := NewDefaultRegistry()
-	RegisterTypedParserOn(legacyRegistry, func(s string) (LegacyUserID, error) {
+	WithParser(func(s string) (LegacyUserID, error) {
 		return LegacyUserID("legacy:" + s), nil
 	})
 
 	newRegistry := NewDefaultRegistry()
-	RegisterTypedParserOn(newRegistry, func(s string) (UserID, error) {
+	WithParser(func(s string) (UserID, error) {
 		return UserID("new:" + s), nil
 	})
 
@@ -1054,7 +1018,7 @@ func TestComplexValidationScenarios(t *testing.T) {
 
 	registry := NewDefaultRegistry()
 
-	RegisterTypedParserOn(registry, func(s string) (EmailAddress, error) {
+	WithParser(func(s string) (EmailAddress, error) {
 		if !strings.Contains(s, "@") {
 			return "", errors.New("invalid email format")
 		}
@@ -1064,7 +1028,7 @@ func TestComplexValidationScenarios(t *testing.T) {
 		return EmailAddress(strings.ToLower(s)), nil
 	})
 
-	RegisterTypedParserOn(registry, func(s string) (PhoneNumber, error) {
+	WithParser(func(s string) (PhoneNumber, error) {
 		cleaned := strings.ReplaceAll(s, "-", "")
 		cleaned = strings.ReplaceAll(cleaned, " ", "")
 		if len(cleaned) < 10 {
@@ -1073,7 +1037,7 @@ func TestComplexValidationScenarios(t *testing.T) {
 		return PhoneNumber(cleaned), nil
 	})
 
-	RegisterTypedParserOn(registry, func(s string) (PersonID, error) {
+	WithParser(func(s string) (PersonID, error) {
 		if len(s) < 5 {
 			return "", errors.New("person ID too short")
 		}
@@ -1215,7 +1179,7 @@ func TestVarFuncAPI_CustomTypes(t *testing.T) {
 	type UserID string
 
 	registry := NewDefaultRegistry()
-	RegisterTypedParserOn(registry, func(s string) (UserID, error) {
+	WithParser(func(s string) (UserID, error) {
 		return UserID("user_" + s), nil
 	})
 

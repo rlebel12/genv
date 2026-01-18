@@ -219,46 +219,44 @@ type AdvancedCustomSettings struct {
 
 // NewCustomRegistrySettings demonstrates custom type parsing with registries
 func NewCustomRegistrySettings() (CustomSettings, error) {
-	// Create a custom registry with built-in parsers
-	registry := genv.NewDefaultRegistry()
+	// Create a custom registry with built-in parsers and custom parsers
+	registry := genv.NewDefaultRegistry(
+		// Register custom UserID parser
+		genv.WithParser(func(s string) (UserID, error) {
+			if s == "" {
+				return "", errors.New("UserID cannot be empty")
+			}
+			if !strings.HasPrefix(s, "user_") {
+				return UserID("user_" + s), nil
+			}
+			return UserID(s), nil
+		}),
+		// Register custom Department parser with validation
+		genv.WithParser(func(s string) (Department, error) {
+			validDepts := map[string]bool{
+				"engineering": true,
+				"marketing":   true,
+				"sales":       true,
+				"hr":          true,
+			}
 
-	// Register custom UserID parser
-	genv.RegisterTypedParserOn(registry, func(s string) (UserID, error) {
-		if s == "" {
-			return "", errors.New("UserID cannot be empty")
-		}
-		if !strings.HasPrefix(s, "user_") {
-			return UserID("user_" + s), nil
-		}
-		return UserID(s), nil
-	})
-
-	// Register custom Department parser with validation
-	genv.RegisterTypedParserOn(registry, func(s string) (Department, error) {
-		validDepts := map[string]bool{
-			"engineering": true,
-			"marketing":   true,
-			"sales":       true,
-			"hr":          true,
-		}
-
-		dept := strings.ToLower(strings.TrimSpace(s))
-		if !validDepts[dept] {
-			return "", fmt.Errorf("invalid department: %s (valid: engineering, marketing, sales, hr)", s)
-		}
-		return Department(dept), nil
-	})
-
-	// Register validated email parser
-	genv.RegisterTypedParserOn(registry, func(s string) (ValidatedEmail, error) {
-		if s == "" {
-			return "", errors.New("email cannot be empty")
-		}
-		if !strings.Contains(s, "@") || !strings.Contains(s, ".") {
-			return "", fmt.Errorf("invalid email format: %s", s)
-		}
-		return ValidatedEmail(strings.ToLower(s)), nil
-	})
+			dept := strings.ToLower(strings.TrimSpace(s))
+			if !validDepts[dept] {
+				return "", fmt.Errorf("invalid department: %s (valid: engineering, marketing, sales, hr)", s)
+			}
+			return Department(dept), nil
+		}),
+		// Register validated email parser
+		genv.WithParser(func(s string) (ValidatedEmail, error) {
+			if s == "" {
+				return "", errors.New("email cannot be empty")
+			}
+			if !strings.Contains(s, "@") || !strings.Contains(s, ".") {
+				return "", fmt.Errorf("invalid email format: %s", s)
+			}
+			return ValidatedEmail(strings.ToLower(s)), nil
+		}),
+	)
 
 	// Create Genv with custom registry
 	env := genv.New(
@@ -287,13 +285,13 @@ func NewCustomRegistrySettings() (CustomSettings, error) {
 func DemonstrateRegistryIsolation() {
 	// Production registry with strict validation for a custom type
 	prodRegistry := genv.NewRegistry() // Start with empty registry
-	genv.RegisterTypedParserOn(prodRegistry, func(s string) (string, error) {
+	genv.WithParser(func(s string) (string, error) {
 		if len(s) < 3 {
 			return "", errors.New("production strings must be at least 3 characters")
 		}
 		return s, nil
 	})
-	genv.RegisterTypedParserOn(prodRegistry, func(s string) (int, error) {
+	genv.WithParser(func(s string) (int, error) {
 		// Production int parsing with range validation
 		val, err := strconv.Atoi(s)
 		if err != nil {
@@ -307,13 +305,13 @@ func DemonstrateRegistryIsolation() {
 
 	// Development registry with lenient validation
 	devRegistry := genv.NewRegistry() // Start with empty registry
-	genv.RegisterTypedParserOn(devRegistry, func(s string) (string, error) {
+	genv.WithParser(func(s string) (string, error) {
 		if s == "" {
 			return "dev-default", nil // Provide default in dev
 		}
 		return s, nil
 	})
-	genv.RegisterTypedParserOn(devRegistry, func(s string) (int, error) {
+	genv.WithParser(func(s string) (int, error) {
 		// Development int parsing that's more forgiving
 		if s == "" {
 			return 42, nil // Default value in dev
@@ -336,7 +334,7 @@ func NewAdvancedCustomTypeSettings() (AdvancedCustomSettings, error) {
 	registry := genv.NewDefaultRegistry()
 
 	// Register Priority parser (enum-like behavior)
-	genv.RegisterTypedParserOn(registry, func(s string) (Priority, error) {
+	genv.WithParser(func(s string) (Priority, error) {
 		switch strings.ToLower(strings.TrimSpace(s)) {
 		case "low":
 			return Priority(1), nil
@@ -352,7 +350,7 @@ func NewAdvancedCustomTypeSettings() (AdvancedCustomSettings, error) {
 	})
 
 	// Register ServiceName parser with prefix handling
-	genv.RegisterTypedParserOn(registry, func(s string) (ServiceName, error) {
+	genv.WithParser(func(s string) (ServiceName, error) {
 		if s == "" {
 			return ServiceName(""), nil // Allow empty for optional
 		}
@@ -366,7 +364,7 @@ func NewAdvancedCustomTypeSettings() (AdvancedCustomSettings, error) {
 	})
 
 	// Register LogLevel parser with strict validation
-	genv.RegisterTypedParserOn(registry, func(s string) (ExampleLogLevel, error) {
+	genv.WithParser(func(s string) (ExampleLogLevel, error) {
 		level := strings.ToUpper(strings.TrimSpace(s))
 		switch level {
 		case "DEBUG", "INFO", "WARN", "ERROR":
