@@ -13,6 +13,26 @@ import (
 )
 
 func main() {
+	// Example 0: Simplified API (NEW!)
+	slog.Info("=== Simplified API Example ===")
+	simplifiedSettings, err := NewSimplifiedSettings()
+	if err != nil {
+		slog.Error("simplified settings", "error", err.Error())
+		os.Exit(1)
+	}
+	slog.Info("Simplified API Results",
+		"AppName", simplifiedSettings.AppName,
+		"Port", simplifiedSettings.Port,
+		"Debug", simplifiedSettings.Debug,
+		"Timeout", simplifiedSettings.Timeout,
+		"DatabaseURL", simplifiedSettings.DatabaseURL,
+		"Tags", simplifiedSettings.Tags,
+	)
+
+	// Example 0b: Using NewType[T]() for creating variables (NEW!)
+	slog.Info("=== NewType[T]() Generic Function Example ===")
+	DemonstrateNewMethod()
+
 	// Example 1: Basic usage (backward compatible)
 	slog.Info("=== Basic Example ===")
 	settings, err := NewSettings()
@@ -58,6 +78,65 @@ func main() {
 		"Priorities", fmt.Sprintf("%v", advancedSettings.Priorities),
 		"OptionalServiceName", advancedSettings.OptionalServiceName,
 		"LogLevel", advancedSettings.LogLevel,
+	)
+}
+
+// SimplifiedSettings demonstrates the new simplified API
+type SimplifiedSettings struct {
+	AppName     string
+	Port        int
+	Debug       bool
+	Timeout     float64
+	DatabaseURL url.URL
+	Tags        []string
+}
+
+// NewSimplifiedSettings shows the new simplified API using the To() method
+// where the type is automatically detected. No need for .String(), .Int(), etc.
+func NewSimplifiedSettings() (SimplifiedSettings, error) {
+	env := genv.New(
+		genv.WithAllowDefault(func(*genv.Genv) (bool, error) { return true, nil }),
+	)
+
+	var s SimplifiedSettings
+
+	// Simplified API: use To() and the type is auto-detected!
+	env.Var("APP_NAME").To(&s.AppName).Default("MyApp")
+	env.Var("PORT").To(&s.Port).Default("8080")
+	env.Var("DEBUG").To(&s.Debug).Default("false")
+	env.Var("TIMEOUT").To(&s.Timeout).Default("30.5")
+	env.Var("DATABASE_URL").To(&s.DatabaseURL).Default("https://db.example.com")
+	env.Var("TAGS").To(&s.Tags).Default("api,web,production")
+
+	if err := env.Parse(); err != nil {
+		return SimplifiedSettings{}, fmt.Errorf("parse env: %w", err)
+	}
+	return s, nil
+}
+
+// DemonstrateNewMethod shows using NewType[T]() for creating variables
+func DemonstrateNewMethod() {
+	env := genv.New(
+		genv.WithAllowDefault(func(*genv.Genv) (bool, error) { return true, nil }),
+	)
+
+	// Use NewType[T]() for creating new variables - unified API for all types!
+	// Works with built-in types AND custom types!
+	apiKey := genv.NewType[string](env.Var("API_KEY").Default("demo-key-12345"))
+	maxRetries := genv.NewType[int](env.Var("MAX_RETRIES").Default("3"))
+	enableCache := genv.NewType[bool](env.Var("ENABLE_CACHE").Default("true"))
+	apiTimeout := genv.NewType[float64](env.Var("API_TIMEOUT").Default("60.0"))
+
+	if err := env.Parse(); err != nil {
+		slog.Error("parse error", "error", err.Error())
+		return
+	}
+
+	slog.Info("NewType[T]() Generic Function Results",
+		"ApiKey", *apiKey,
+		"MaxRetries", *maxRetries,
+		"EnableCache", *enableCache,
+		"ApiTimeout", *apiTimeout,
 	)
 }
 
@@ -187,9 +266,12 @@ func NewCustomRegistrySettings() (CustomSettings, error) {
 
 	var s CustomSettings
 
-	genv.Type(env.Var("CUSTOM_USER_ID").Default("demo123"), &s.UserID)
-	genv.Type(env.Var("CUSTOM_DEPARTMENT").Default("engineering"), &s.Department)
-	genv.Type(env.Var("CUSTOM_EMAIL").Default("demo@example.com"), &s.ValidatedEmail)
+	// Simplified API works with custom types too!
+	// Before: genv.Type(env.Var("CUSTOM_USER_ID").Default("demo123"), &s.UserID)
+	// After:  env.Var("CUSTOM_USER_ID").To(&s.UserID).Default("demo123")
+	env.Var("CUSTOM_USER_ID").To(&s.UserID).Default("demo123")
+	env.Var("CUSTOM_DEPARTMENT").To(&s.Department).Default("engineering")
+	env.Var("CUSTOM_EMAIL").To(&s.ValidatedEmail).Default("demo@example.com")
 
 	if err := env.Parse(); err != nil {
 		return CustomSettings{}, fmt.Errorf("parse custom env: %w", err)
@@ -300,14 +382,20 @@ func NewAdvancedCustomTypeSettings() (AdvancedCustomSettings, error) {
 
 	var s AdvancedCustomSettings
 
-	// Demonstrate slice parsing with custom types
-	genv.Types(env.Var("TASK_PRIORITIES").Default("medium|high|low"), &s.Priorities)
+	// Simplified API works with slices and custom types too!
+	// Before: genv.Types(env.Var("TASK_PRIORITIES").Default("medium|high|low"), &s.Priorities)
+	// After:  env.Var("TASK_PRIORITIES").To(&s.Priorities).Default("medium|high|low")
+	env.Var("TASK_PRIORITIES").To(&s.Priorities).Default("medium|high|low")
 
-	// Demonstrate optional custom type (won't error if missing/empty)
-	genv.Type(env.Var("SERVICE_NAME").Optional(), &s.OptionalServiceName)
+	// Simplified API for optional custom types
+	// Before: genv.Type(env.Var("SERVICE_NAME").Optional(), &s.OptionalServiceName)
+	// After:  env.Var("SERVICE_NAME").To(&s.OptionalServiceName).Optional()
+	env.Var("SERVICE_NAME").To(&s.OptionalServiceName).Optional()
 
-	// Demonstrate custom type with default value
-	genv.Type(env.Var("LOG_LEVEL").Default("INFO"), &s.LogLevel)
+	// Simplified API for custom types with defaults
+	// Before: genv.Type(env.Var("LOG_LEVEL").Default("INFO"), &s.LogLevel)
+	// After:  env.Var("LOG_LEVEL").To(&s.LogLevel).Default("INFO")
+	env.Var("LOG_LEVEL").To(&s.LogLevel).Default("INFO")
 
 	if err := env.Parse(); err != nil {
 		return AdvancedCustomSettings{}, fmt.Errorf("parse advanced env: %w", err)

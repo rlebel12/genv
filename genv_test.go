@@ -1149,3 +1149,226 @@ func TestComplexValidationScenarios(t *testing.T) {
 		})
 	}
 }
+
+// Tests for the new simplified To() API
+func TestToMethod_BuiltinTypes(t *testing.T) {
+	t.Run("String", func(t *testing.T) {
+		t.Setenv("TEST_STRING", "hello")
+		env := New()
+		var s string
+		env.Var("TEST_STRING").To(&s)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, "hello", s)
+	})
+
+	t.Run("Int", func(t *testing.T) {
+		t.Setenv("TEST_INT", "42")
+		env := New()
+		var i int
+		env.Var("TEST_INT").To(&i)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, 42, i)
+	})
+
+	t.Run("Bool", func(t *testing.T) {
+		t.Setenv("TEST_BOOL", "true")
+		env := New()
+		var b bool
+		env.Var("TEST_BOOL").To(&b)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.True(t, b)
+	})
+
+	t.Run("Float64", func(t *testing.T) {
+		t.Setenv("TEST_FLOAT", "3.14")
+		env := New()
+		var f float64
+		env.Var("TEST_FLOAT").To(&f)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, 3.14, f)
+	})
+
+	t.Run("URL", func(t *testing.T) {
+		t.Setenv("TEST_URL", "https://example.com")
+		env := New()
+		var u url.URL
+		env.Var("TEST_URL").To(&u)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, "https", u.Scheme)
+		assert.Equal(t, "example.com", u.Host)
+	})
+}
+
+func TestToMethod_Slices(t *testing.T) {
+	t.Run("StringSlice", func(t *testing.T) {
+		t.Setenv("TEST_STRINGS", "a,b,c")
+		env := New()
+		var s []string
+		env.Var("TEST_STRINGS").To(&s)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"a", "b", "c"}, s)
+	})
+
+	t.Run("IntSlice", func(t *testing.T) {
+		t.Setenv("TEST_INTS", "1,2,3")
+		env := New()
+		var ints []int
+		env.Var("TEST_INTS").To(&ints)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, []int{1, 2, 3}, ints)
+	})
+
+	t.Run("CustomDelimiter", func(t *testing.T) {
+		t.Setenv("TEST_STRINGS", "a;b;c")
+		env := New(WithSplitKey(";"))
+		var s []string
+		env.Var("TEST_STRINGS").To(&s)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"a", "b", "c"}, s)
+	})
+}
+
+func TestToMethod_WithOptions(t *testing.T) {
+	t.Run("Optional", func(t *testing.T) {
+		env := New()
+		var s string
+		env.Var("UNDEFINED_VAR").To(&s).Optional()
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, "", s)
+	})
+
+	t.Run("Default", func(t *testing.T) {
+		env := New(WithAllowDefault(func(*Genv) (bool, error) { return true, nil }))
+		var s string
+		env.Var("UNDEFINED_VAR").To(&s).Default("default_value")
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, "default_value", s)
+	})
+
+	t.Run("OptionalWithDefault", func(t *testing.T) {
+		env := New(WithAllowDefault(func(*Genv) (bool, error) { return true, nil }))
+		var i int
+		env.Var("UNDEFINED_VAR").To(&i).Optional().Default("99")
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, 99, i)
+	})
+}
+
+func TestToMethod_CustomTypes(t *testing.T) {
+	type UserID string
+	type Status int
+
+	registry := NewDefaultRegistry()
+	RegisterTypedParserOn(registry, func(s string) (UserID, error) {
+		if !strings.HasPrefix(s, "user_") {
+			return UserID("user_" + s), nil
+		}
+		return UserID(s), nil
+	})
+	RegisterTypedParserOn(registry, func(s string) (Status, error) {
+		switch s {
+		case "active":
+			return Status(1), nil
+		case "inactive":
+			return Status(0), nil
+		default:
+			return Status(0), errors.New("invalid status")
+		}
+	})
+
+	t.Run("CustomType", func(t *testing.T) {
+		t.Setenv("USER_ID", "12345")
+		env := New(WithRegistry(registry))
+		var userID UserID
+		env.Var("USER_ID").To(&userID)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, UserID("user_12345"), userID)
+	})
+
+	t.Run("CustomTypeSlice", func(t *testing.T) {
+		t.Setenv("STATUSES", "active,inactive,active")
+		env := New(WithRegistry(registry))
+		var statuses []Status
+		env.Var("STATUSES").To(&statuses)
+		err := env.Parse()
+		assert.NoError(t, err)
+		assert.Equal(t, []Status{1, 0, 1}, statuses)
+	})
+}
+
+func TestToMethod_Errors(t *testing.T) {
+	t.Run("RequiredMissing", func(t *testing.T) {
+		env := New()
+		var s string
+		env.Var("MISSING_VAR").To(&s)
+		err := env.Parse()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "environment variable is empty or unset")
+	})
+
+	t.Run("InvalidType", func(t *testing.T) {
+		t.Setenv("TEST_INT", "not_a_number")
+		env := New()
+		var i int
+		env.Var("TEST_INT").To(&i)
+		err := env.Parse()
+		assert.Error(t, err)
+	})
+
+	t.Run("UnregisteredCustomType", func(t *testing.T) {
+		type UnregisteredType string
+		t.Setenv("TEST_VAR", "value")
+		env := New(WithRegistry(NewRegistry())) // Empty registry
+		var ut UnregisteredType
+		env.Var("TEST_VAR").To(&ut)
+		err := env.Parse()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no parser registered")
+	})
+}
+
+func TestToMethod_ComplexScenario(t *testing.T) {
+	// Test using To() with multiple variables and mixed types
+	type Config struct {
+		AppName  string
+		Port     int
+		Debug    bool
+		Timeout  float64
+		Features []string
+	}
+
+	t.Setenv("APP_NAME", "MyApp")
+	t.Setenv("PORT", "8080")
+	t.Setenv("DEBUG", "true")
+	t.Setenv("TIMEOUT", "30.5")
+	t.Setenv("FEATURES", "auth,api,web")
+
+	env := New()
+	var cfg Config
+
+	env.Var("APP_NAME").To(&cfg.AppName)
+	env.Var("PORT").To(&cfg.Port)
+	env.Var("DEBUG").To(&cfg.Debug)
+	env.Var("TIMEOUT").To(&cfg.Timeout)
+	env.Var("FEATURES").To(&cfg.Features)
+
+	err := env.Parse()
+	assert.NoError(t, err)
+	assert.Equal(t, "MyApp", cfg.AppName)
+	assert.Equal(t, 8080, cfg.Port)
+	assert.True(t, cfg.Debug)
+	assert.Equal(t, 30.5, cfg.Timeout)
+	assert.Equal(t, []string{"auth", "api", "web"}, cfg.Features)
+}
