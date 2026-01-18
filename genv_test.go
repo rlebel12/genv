@@ -57,7 +57,7 @@ func TestNew(t *testing.T) {
 				splitKey: ",",
 				genv:     genv,
 			}
-				expected.allowDefault, actual.allowDefault = nil, nil
+			expected.allowDefault, actual.allowDefault = nil, nil
 			assert.Equal(t, *expected, *actual)
 		})
 	}

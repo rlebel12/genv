@@ -108,18 +108,21 @@ This example shows how to structure configuration for different deployment envir
 ```go
 type UserID string
 
-genv.RegisterTypedParserOn(registry, func(s string) (UserID, error) {
-    if s == "" {
-        return "", errors.New("UserID cannot be empty")
-    }
-    if !strings.HasPrefix(s, "user_") {
-        return UserID("user_" + s), nil
-    }
-    return UserID(s), nil
-})
+registry := genv.NewDefaultRegistry(
+    genv.WithParser(func(s string) (UserID, error) {
+        if s == "" {
+            return "", errors.New("UserID cannot be empty")
+        }
+        if !strings.HasPrefix(s, "user_") {
+            return UserID("user_" + s), nil
+        }
+        return UserID(s), nil
+    }),
+)
 
+env := genv.New(genv.WithRegistry(registry))
 var userID UserID
-genv.Type(env.Var("USER_ID"), &userID)
+err := genv.Parse(env, genv.Bind("USER_ID", &userID))
 ```
 
 ### Enum-like Custom Type
@@ -127,18 +130,21 @@ genv.Type(env.Var("USER_ID"), &userID)
 ```go
 type Priority int
 
-genv.RegisterTypedParserOn(registry, func(s string) (Priority, error) {
-    switch strings.ToLower(s) {
-    case "low": return Priority(1), nil
-    case "medium": return Priority(2), nil
-    case "high": return Priority(3), nil
-    case "critical": return Priority(4), nil
-    default: return Priority(0), fmt.Errorf("invalid priority: %s", s)
-    }
-})
+registry := genv.NewDefaultRegistry(
+    genv.WithParser(func(s string) (Priority, error) {
+        switch strings.ToLower(s) {
+        case "low": return Priority(1), nil
+        case "medium": return Priority(2), nil
+        case "high": return Priority(3), nil
+        case "critical": return Priority(4), nil
+        default: return Priority(0), fmt.Errorf("invalid priority: %s", s)
+        }
+    }),
+)
 
+env := genv.New(genv.WithRegistry(registry))
 var priorities []Priority
-genv.Types(env.Var("PRIORITIES"), &priorities) // "low,high,medium"
+err := genv.Parse(env, genv.BindMany("PRIORITIES", &priorities)) // "low,high,medium"
 ```
 
 ### Custom Type with Complex Validation

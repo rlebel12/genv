@@ -64,7 +64,7 @@ func WithRegistry(registry *ParserRegistry) Opt[Genv] {
 	}
 }
 
-// Var Returns a new environment variable with the given key.
+// Var returns a new environment variable with the given key.
 func (genv *Genv) Var(key string, opts ...Opt[Var]) *Var {
 	ev := new(Var)
 	ev.key = key
@@ -147,7 +147,7 @@ func (v *Var) Optional() *Var {
 	return v
 }
 
-// Default Sets the default value for the environment variable if not present
+// Default sets the default value for the environment variable if not present.
 func (v *Var) Default(value string, opts ...Opt[fallback]) *Var {
 	fb := new(fallback)
 	fb.allow = v.allowDefault
@@ -232,7 +232,7 @@ func parseMany[T any](ev *Var, result *[]T, opts ...Opt[Var]) error {
 func assignValue[T any](ev *Var, target *T) error {
 	value, err := parseOne[T](ev)
 	if err != nil {
-		return fmt.Errorf("parseOne: %w", err)
+		return fmt.Errorf("parse value: %w", err)
 	}
 
 	typedResult, ok := value.(T)
@@ -385,7 +385,6 @@ func getParser[T any](registry *ParserRegistry) (Parser, bool) {
 	return registry.get(targetType)
 }
 
-// Type sets the value of a variable of type T using the registered parser
 // parseOne parses using the reflection-based parser interface
 func parseOne[T any](ev *Var) (any, error) {
 	parser, exists := getParser[T](ev.genv.registry)
@@ -434,7 +433,7 @@ func Bind[T any](key string, target *T) VarFunc {
 		v := env.Var(key)
 		v.genv.varFuncs = append(v.genv.varFuncs, func() error {
 			if err := assignValue(v, target); err != nil {
-				return fmt.Errorf("assignValue: %w", err)
+				return fmt.Errorf("assign value: %w", err)
 			}
 			return nil
 		})
