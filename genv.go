@@ -390,58 +390,88 @@ func (r *ParserRegistry) get(targetType reflect.Type) (Parser, bool) {
 	return parser, exists
 }
 
-// RegisterTypedParser registers a parser with type safety on a specific registry
-func RegisterTypedParserOn[T any](registry *ParserRegistry, parseFn func(string) (T, error)) {
-	var zero T
-	targetType := reflect.TypeOf(zero)
+// RegistryOpt is a functional option for configuring a ParserRegistry
+type RegistryOpt func(*ParserRegistry)
 
-	wrappedFn := func(s string) (any, error) {
-		result, err := parseFn(s)
-		if err != nil {
-			return nil, err
+// WithParser registers a type-safe parser for type T.
+// The type is inferred from the function signature.
+//
+// Example:
+//   registry := genv.NewDefaultRegistry(
+//       genv.WithParser(func(s string) (UserID, error) {
+//           return UserID("user_" + s), nil
+//       }),
+//   )
+func WithParser[T any](parseFn func(string) (T, error)) RegistryOpt {
+	return func(r *ParserRegistry) {
+		var zero T
+		targetType := reflect.TypeOf(zero)
+
+		wrappedFn := func(s string) (any, error) {
+			result, err := parseFn(s)
+			if err != nil {
+				return nil, err
+			}
+			return result, nil
 		}
-		return result, nil
+
+		parser := newParser(targetType, wrappedFn)
+		r.register(targetType, parser)
 	}
-
-	registry.RegisterParseFunc(targetType, wrappedFn)
 }
 
-// RegisterParseFunc registers a parser using pure reflection (method API)
-func (r *ParserRegistry) RegisterParseFunc(targetType reflect.Type, parseFn func(string) (any, error)) {
-	parser := newParser(targetType, parseFn)
-	r.register(targetType, parser)
-}
-
-// NewRegistry creates an empty parser registry
-func NewRegistry() *ParserRegistry {
-	return newParserRegistry()
-}
-
-// NewDefaultRegistry creates a parser registry with all built-in parsers
-func NewDefaultRegistry() *ParserRegistry {
-	registry := newParserRegistry()
-
-	RegisterTypedParserOn(registry, func(s string) (string, error) {
+// registerBuiltinParsers registers all built-in type parsers
+func registerBuiltinParsers(r *ParserRegistry) {
+	WithParser(func(s string) (string, error) {
 		return s, nil
-	})
-	RegisterTypedParserOn(registry, strconv.ParseBool)
-	RegisterTypedParserOn(registry, strconv.Atoi)
-	RegisterTypedParserOn(registry, func(s string) (float64, error) {
+	})(r)
+	WithParser(strconv.ParseBool)(r)
+	WithParser(strconv.Atoi)(r)
+	WithParser(func(s string) (float64, error) {
 		return strconv.ParseFloat(s, 64)
-	})
-	RegisterTypedParserOn(registry, func(s string) (url.URL, error) {
+	})(r)
+	WithParser(func(s string) (url.URL, error) {
 		result, err := url.Parse(s)
 		if err != nil {
 			return url.URL{}, err
 		}
 		return *result, nil
-	})
-	RegisterTypedParserOn(registry, uuid.Parse)
-	RegisterTypedParserOn(registry, func(s string) (time.Time, error) {
+	})(r)
+	WithParser(uuid.Parse)(r)
+	WithParser(func(s string) (time.Time, error) {
 		return time.Parse(time.RFC3339, s)
-	})
+	})(r)
+}
 
-	return registry
+// NewRegistry creates an empty parser registry with optional custom parsers.
+//
+// Example:
+//   registry := genv.NewRegistry(
+//       genv.WithParser(func(s string) (UserID, error) { ... }),
+//   )
+func NewRegistry(opts ...RegistryOpt) *ParserRegistry {
+	r := newParserRegistry()
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
+}
+
+// NewDefaultRegistry creates a parser registry with all built-in parsers
+// (string, bool, int, float64, url.URL, uuid.UUID, time.Time) and optional
+// custom parsers.
+//
+// Example:
+//   registry := genv.NewDefaultRegistry(
+//       genv.WithParser(func(s string) (UserID, error) { ... }),
+//   )
+func NewDefaultRegistry(opts ...RegistryOpt) *ParserRegistry {
+	r := newParserRegistry()
+	registerBuiltinParsers(r)
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // getParser retrieves a parser for a specific type from the given registry
