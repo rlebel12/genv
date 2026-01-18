@@ -43,116 +43,108 @@ type MicroserviceConfig struct {
 
 // NewProductionRegistry creates a registry with production-grade validation
 func NewProductionRegistry() *genv.ParserRegistry {
-	registry := genv.NewDefaultRegistry()
-
-	// ServicePort with validation
-	genv.RegisterTypedParserOn(registry, func(s string) (ServicePort, error) {
-		port, err := strconv.Atoi(s)
-		if err != nil {
-			return ServicePort(0), fmt.Errorf("invalid port: %w", err)
-		}
-		if port < 1024 || port > 65535 {
-			return ServicePort(0), errors.New("port must be between 1024-65535")
-		}
-		return ServicePort(port), nil
-	})
-
-	// DatabaseURL with basic validation
-	genv.RegisterTypedParserOn(registry, func(s string) (DatabaseURL, error) {
-		if s == "" {
-			return "", errors.New("database URL cannot be empty")
-		}
-		if !strings.HasPrefix(s, "postgres://") && !strings.HasPrefix(s, "mysql://") {
-			return "", errors.New("database URL must start with postgres:// or mysql://")
-		}
-		return DatabaseURL(s), nil
-	})
-
-	// Environment with strict validation
-	genv.RegisterTypedParserOn(registry, func(s string) (MicroEnvironment, error) {
-		env := strings.ToLower(s)
-		switch env {
-		case "development", "staging", "production":
-			return MicroEnvironment(env), nil
-		default:
-			return "", fmt.Errorf("invalid environment: %s (must be development, staging, or production)", s)
-		}
-	})
-
-	// MetricsInterval with reasonable bounds
-	genv.RegisterTypedParserOn(registry, func(s string) (MetricsInterval, error) {
-		duration, err := time.ParseDuration(s)
-		if err != nil {
-			return MetricsInterval(0), fmt.Errorf("invalid duration: %w", err)
-		}
-		if duration < time.Second || duration > time.Hour {
-			return MetricsInterval(0), errors.New("metrics interval must be between 1s and 1h")
-		}
-		return MetricsInterval(duration), nil
-	})
-
-	// LogLevel with case-insensitive parsing
-	genv.RegisterTypedParserOn(registry, func(s string) (MicroLogLevel, error) {
-		level := strings.ToUpper(s)
-		switch level {
-		case "DEBUG", "INFO", "WARN", "ERROR", "FATAL":
-			return MicroLogLevel(level), nil
-		default:
-			return "", fmt.Errorf("invalid log level: %s (must be DEBUG, INFO, WARN, ERROR, or FATAL)", s)
-		}
-	})
+	registry := genv.NewDefaultRegistry(
+		// ServicePort with validation
+		genv.WithParser(func(s string) (ServicePort, error) {
+			port, err := strconv.Atoi(s)
+			if err != nil {
+				return ServicePort(0), fmt.Errorf("invalid port: %w", err)
+			}
+			if port < 1024 || port > 65535 {
+				return ServicePort(0), errors.New("port must be between 1024-65535")
+			}
+			return ServicePort(port), nil
+		}),
+		// DatabaseURL with basic validation
+		genv.WithParser(func(s string) (DatabaseURL, error) {
+			if s == "" {
+				return "", errors.New("database URL cannot be empty")
+			}
+			if !strings.HasPrefix(s, "postgres://") && !strings.HasPrefix(s, "mysql://") {
+				return "", errors.New("database URL must start with postgres:// or mysql://")
+			}
+			return DatabaseURL(s), nil
+		}),
+		// Environment with strict validation
+		genv.WithParser(func(s string) (MicroEnvironment, error) {
+			env := strings.ToLower(s)
+			switch env {
+			case "development", "staging", "production":
+				return MicroEnvironment(env), nil
+			default:
+				return "", fmt.Errorf("invalid environment: %s (must be development, staging, or production)", s)
+			}
+		}),
+		// MetricsInterval with reasonable bounds
+		genv.WithParser(func(s string) (MetricsInterval, error) {
+			duration, err := time.ParseDuration(s)
+			if err != nil {
+				return MetricsInterval(0), fmt.Errorf("invalid duration: %w", err)
+			}
+			if duration < time.Second || duration > time.Hour {
+				return MetricsInterval(0), errors.New("metrics interval must be between 1s and 1h")
+			}
+			return MetricsInterval(duration), nil
+		}),
+		// LogLevel with case-insensitive parsing
+		genv.WithParser(func(s string) (MicroLogLevel, error) {
+			level := strings.ToUpper(s)
+			switch level {
+			case "DEBUG", "INFO", "WARN", "ERROR", "FATAL":
+				return MicroLogLevel(level), nil
+			default:
+				return "", fmt.Errorf("invalid log level: %s (must be DEBUG, INFO, WARN, ERROR, or FATAL)", s)
+			}
+		}),
+	)
 
 	return registry
 }
 
 // NewDevelopmentRegistry creates a registry with lenient validation for development
 func NewDevelopmentRegistry() *genv.ParserRegistry {
-	registry := genv.NewDefaultRegistry()
-
-	// Lenient ServicePort (allows any port for dev)
-	genv.RegisterTypedParserOn(registry, func(s string) (ServicePort, error) {
-		port, err := strconv.Atoi(s)
-		if err != nil {
-			return ServicePort(8080), nil // Default for dev
-		}
-		return ServicePort(port), nil
-	})
-
-	// Lenient DatabaseURL (allows local/test URLs)
-	genv.RegisterTypedParserOn(registry, func(s string) (DatabaseURL, error) {
-		if s == "" {
-			return DatabaseURL("postgres://localhost:5432/testdb"), nil
-		}
-		return DatabaseURL(s), nil
-	})
-
-	// Lenient Environment (defaults to development)
-	genv.RegisterTypedParserOn(registry, func(s string) (MicroEnvironment, error) {
-		if s == "" {
-			return MicroEnvironment("development"), nil
-		}
-		return MicroEnvironment(strings.ToLower(s)), nil
-	})
-
-	// Default MetricsInterval for dev
-	genv.RegisterTypedParserOn(registry, func(s string) (MetricsInterval, error) {
-		if s == "" {
-			return MetricsInterval(30 * time.Second), nil
-		}
-		duration, err := time.ParseDuration(s)
-		if err != nil {
-			return MetricsInterval(30 * time.Second), nil
-		}
-		return MetricsInterval(duration), nil
-	})
-
-	// Default LogLevel for dev
-	genv.RegisterTypedParserOn(registry, func(s string) (MicroLogLevel, error) {
-		if s == "" {
-			return MicroLogLevel("DEBUG"), nil
-		}
-		return MicroLogLevel(strings.ToUpper(s)), nil
-	})
+	registry := genv.NewDefaultRegistry(
+		// Lenient ServicePort (allows any port for dev)
+		genv.WithParser(func(s string) (ServicePort, error) {
+			port, err := strconv.Atoi(s)
+			if err != nil {
+				return ServicePort(8080), nil // Default for dev
+			}
+			return ServicePort(port), nil
+		}),
+		// Lenient DatabaseURL (allows local/test URLs)
+		genv.WithParser(func(s string) (DatabaseURL, error) {
+			if s == "" {
+				return DatabaseURL("postgres://localhost:5432/testdb"), nil
+			}
+			return DatabaseURL(s), nil
+		}),
+		// Lenient Environment (defaults to development)
+		genv.WithParser(func(s string) (MicroEnvironment, error) {
+			if s == "" {
+				return MicroEnvironment("development"), nil
+			}
+			return MicroEnvironment(strings.ToLower(s)), nil
+		}),
+		// Default MetricsInterval for dev
+		genv.WithParser(func(s string) (MetricsInterval, error) {
+			if s == "" {
+				return MetricsInterval(30 * time.Second), nil
+			}
+			duration, err := time.ParseDuration(s)
+			if err != nil {
+				return MetricsInterval(30 * time.Second), nil
+			}
+			return MetricsInterval(duration), nil
+		}),
+		// Default LogLevel for dev
+		genv.WithParser(func(s string) (MicroLogLevel, error) {
+			if s == "" {
+				return MicroLogLevel("DEBUG"), nil
+			}
+			return MicroLogLevel(strings.ToUpper(s)), nil
+		}),
+	)
 
 	return registry
 }

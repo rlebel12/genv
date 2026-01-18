@@ -284,40 +284,42 @@ func NewCustomRegistrySettings() (CustomSettings, error) {
 // DemonstrateRegistryIsolation shows how different registries can have different behavior
 func DemonstrateRegistryIsolation() {
 	// Production registry with strict validation for a custom type
-	prodRegistry := genv.NewRegistry() // Start with empty registry
-	genv.WithParser(func(s string) (string, error) {
-		if len(s) < 3 {
-			return "", errors.New("production strings must be at least 3 characters")
-		}
-		return s, nil
-	})
-	genv.WithParser(func(s string) (int, error) {
-		// Production int parsing with range validation
-		val, err := strconv.Atoi(s)
-		if err != nil {
-			return 0, err
-		}
-		if val < 0 || val > 1000 {
-			return 0, errors.New("production integers must be between 0-1000")
-		}
-		return val, nil
-	})
+	prodRegistry := genv.NewRegistry(
+		genv.WithParser(func(s string) (string, error) {
+			if len(s) < 3 {
+				return "", errors.New("production strings must be at least 3 characters")
+			}
+			return s, nil
+		}),
+		genv.WithParser(func(s string) (int, error) {
+			// Production int parsing with range validation
+			val, err := strconv.Atoi(s)
+			if err != nil {
+				return 0, err
+			}
+			if val < 0 || val > 1000 {
+				return 0, errors.New("production integers must be between 0-1000")
+			}
+			return val, nil
+		}),
+	)
 
 	// Development registry with lenient validation
-	devRegistry := genv.NewRegistry() // Start with empty registry
-	genv.WithParser(func(s string) (string, error) {
-		if s == "" {
-			return "dev-default", nil // Provide default in dev
-		}
-		return s, nil
-	})
-	genv.WithParser(func(s string) (int, error) {
-		// Development int parsing that's more forgiving
-		if s == "" {
-			return 42, nil // Default value in dev
-		}
-		return strconv.Atoi(s)
-	})
+	devRegistry := genv.NewRegistry(
+		genv.WithParser(func(s string) (string, error) {
+			if s == "" {
+				return "dev-default", nil // Provide default in dev
+			}
+			return s, nil
+		}),
+		genv.WithParser(func(s string) (int, error) {
+			// Development int parsing that's more forgiving
+			if s == "" {
+				return 42, nil // Default value in dev
+			}
+			return strconv.Atoi(s)
+		}),
+	)
 
 	_ = genv.New(genv.WithRegistry(prodRegistry))
 	_ = genv.New(genv.WithRegistry(devRegistry))
@@ -331,48 +333,46 @@ func DemonstrateRegistryIsolation() {
 // NewAdvancedCustomTypeSettings demonstrates advanced custom type features
 func NewAdvancedCustomTypeSettings() (AdvancedCustomSettings, error) {
 	// Create registry with advanced custom types
-	registry := genv.NewDefaultRegistry()
-
-	// Register Priority parser (enum-like behavior)
-	genv.WithParser(func(s string) (Priority, error) {
-		switch strings.ToLower(strings.TrimSpace(s)) {
-		case "low":
-			return Priority(1), nil
-		case "medium":
-			return Priority(2), nil
-		case "high":
-			return Priority(3), nil
-		case "critical":
-			return Priority(4), nil
-		default:
-			return Priority(0), fmt.Errorf("invalid priority: %s (valid: low, medium, high, critical)", s)
-		}
-	})
-
-	// Register ServiceName parser with prefix handling
-	genv.WithParser(func(s string) (ServiceName, error) {
-		if s == "" {
-			return ServiceName(""), nil // Allow empty for optional
-		}
-		if len(s) < 3 {
-			return "", errors.New("service name must be at least 3 characters")
-		}
-		if !strings.HasPrefix(s, "svc-") {
-			return ServiceName("svc-" + s), nil
-		}
-		return ServiceName(s), nil
-	})
-
-	// Register LogLevel parser with strict validation
-	genv.WithParser(func(s string) (ExampleLogLevel, error) {
-		level := strings.ToUpper(strings.TrimSpace(s))
-		switch level {
-		case "DEBUG", "INFO", "WARN", "ERROR":
-			return ExampleLogLevel(level), nil
-		default:
-			return "", fmt.Errorf("invalid log level: %s (valid: DEBUG, INFO, WARN, ERROR)", s)
-		}
-	})
+	registry := genv.NewDefaultRegistry(
+		// Register Priority parser (enum-like behavior)
+		genv.WithParser(func(s string) (Priority, error) {
+			switch strings.ToLower(strings.TrimSpace(s)) {
+			case "low":
+				return Priority(1), nil
+			case "medium":
+				return Priority(2), nil
+			case "high":
+				return Priority(3), nil
+			case "critical":
+				return Priority(4), nil
+			default:
+				return Priority(0), fmt.Errorf("invalid priority: %s (valid: low, medium, high, critical)", s)
+			}
+		}),
+		// Register ServiceName parser with prefix handling
+		genv.WithParser(func(s string) (ServiceName, error) {
+			if s == "" {
+				return ServiceName(""), nil // Allow empty for optional
+			}
+			if len(s) < 3 {
+				return "", errors.New("service name must be at least 3 characters")
+			}
+			if !strings.HasPrefix(s, "svc-") {
+				return ServiceName("svc-" + s), nil
+			}
+			return ServiceName(s), nil
+		}),
+		// Register LogLevel parser with strict validation
+		genv.WithParser(func(s string) (ExampleLogLevel, error) {
+			level := strings.ToUpper(strings.TrimSpace(s))
+			switch level {
+			case "DEBUG", "INFO", "WARN", "ERROR":
+				return ExampleLogLevel(level), nil
+			default:
+				return "", fmt.Errorf("invalid log level: %s (valid: DEBUG, INFO, WARN, ERROR)", s)
+			}
+		}),
+	)
 
 	// Create Genv with custom registry and allow defaults
 	env := genv.New(
