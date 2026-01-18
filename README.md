@@ -19,10 +19,46 @@ First, ensure that the package is imported:
 import "github.com/rlebel12/genv"
 ```
 
-In its most basic form, the package can be used to retrieve environment variables and then parse them into specified types:
+### Simplified API (Recommended)
+
+The new `Bind()`/`BindMany()` API provides a clean, ergonomic way to declare and parse environment variables with automatic type inference via generics:
 
 ```go
-env := genv.New() // Creates instance with default parsers
+type Config struct {
+    AppName     string
+    Port        int
+    Debug       bool
+    Timeout     float64
+    DatabaseURL url.URL
+    Tags        []string
+}
+
+env := genv.New(
+    genv.WithAllowDefault(func(*genv.Genv) (bool, error) { return true, nil }),
+)
+
+var config Config
+
+// All variables registered and parsed in one call with type inference!
+err := genv.Parse(env,
+    genv.Bind("APP_NAME", &config.AppName).Default("MyApp"),
+    genv.Bind("PORT", &config.Port).Default("8080"),
+    genv.Bind("DEBUG", &config.Debug).Default("false"),
+    genv.Bind("TIMEOUT", &config.Timeout).Default("30.5"),
+    genv.Bind("DATABASE_URL", &config.DatabaseURL).Default("https://db.example.com"),
+    genv.BindMany("TAGS", &config.Tags).Default("api,web,production"),
+)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### Classic API (Still Supported)
+
+For more control, you can use the classic API:
+
+```go
+env := genv.New()
 
 StringVar := env.Var("STRING_VAR").NewString()
 BoolVar := env.Var("BOOL_VAR").NewBool()
@@ -31,11 +67,10 @@ FloatVar := env.Var("FLOAT_VAR").NewFloat64()
 URLVar := env.Var("URL_VAR").NewURL()
 
 if err := env.Parse(); err != nil {
-    slog.Error("env parse", "error", err.Error())
+    log.Fatal(err)
 }
 
-// Or instead, using pointers:
-
+// Or using pointers to populate a struct:
 type Example struct {
     StringVar string
     IntVar    int
@@ -46,12 +81,8 @@ env.Var("STRING_VAR").String(&example.StringVar)
 env.Var("INT_VAR").Int(&example.IntVar)
 
 if err := env.Parse(); err != nil {
-    slog.Error("env parse", "error", err.Error())
+    log.Fatal(err)
 }
-
-// Advanced: Using custom registries (optional)
-customRegistry := genv.NewDefaultRegistry() // or genv.NewRegistry() for empty
-env := genv.New(genv.WithRegistry(customRegistry))
 ```
 
 ### Optional Variables
@@ -109,28 +140,57 @@ var OptionalDefaultVar = genv.Var("OPTIONAL_DEFAULT_VAR").
 
 ### Custom Types & Parser Registry
 
-The package supports registering custom type parsers and using isolated parser registries:
+The package supports registering custom type parsers using functional options:
 
 #### Registering Custom Types
 
-You can register parsers for your own types on specific registries:
+Use `WithParser` to register custom types when creating a registry:
 
 ```go
-// Define custom type
+// Define custom types
 type UserID string
+type Department string
 
-// Create registry and register custom type
-registry := genv.NewDefaultRegistry()
-genv.RegisterTypedParserOn(registry, func(s string) (UserID, error) {
-    if s == "" {
-        return "", errors.New("UserID cannot be empty")
-    }
-    return UserID("user_" + s), nil
-})
+// Create registry with custom parsers using functional options
+registry := genv.NewDefaultRegistry(
+    genv.WithParser(func(s string) (UserID, error) {
+        if s == "" {
+            return "", errors.New("UserID cannot be empty")
+        }
+        if !strings.HasPrefix(s, "user_") {
+            return UserID("user_" + s), nil
+        }
+        return UserID(s), nil
+    }),
+    genv.WithParser(func(s string) (Department, error) {
+        validDepts := map[string]bool{
+            "engineering": true,
+            "marketing":   true,
+            "sales":       true,
+        }
+        dept := strings.ToLower(strings.TrimSpace(s))
+        if !validDepts[dept] {
+            return "", fmt.Errorf("invalid department: %s", s)
+        }
+        return Department(dept), nil
+    }),
+)
 
-// Use custom registry
-env := genv.New(genv.WithRegistry(registry))
-// Note: Direct custom type support would require additional API methods
+// Use custom registry with the simplified API
+env := genv.New(
+    genv.WithRegistry(registry),
+    genv.WithAllowDefault(func(*genv.Genv) (bool, error) { return true, nil }),
+)
+
+var config struct {
+    UserID     UserID
+    Department Department
+}
+
+err := genv.Parse(env,
+    genv.Bind("USER_ID", &config.UserID).Default("demo123"),
+    genv.Bind("DEPARTMENT", &config.Department).Default("engineering"),
+)
 ```
 
 #### Custom Parser Registries
@@ -139,15 +199,18 @@ Create isolated parser registries for different contexts:
 
 ```go
 // Create empty registry (no built-in parsers)
-customRegistry := genv.NewRegistry()
+customRegistry := genv.NewRegistry(
+    genv.WithParser(func(s string) (string, error) {
+        return strings.ToUpper(s), nil // Custom string behavior
+    }),
+)
 
-// Register only the types you need
-genv.RegisterTypedParserOn(customRegistry, func(s string) (string, error) {
-    return strings.ToUpper(s), nil // Custom string behavior
-})
-
-// Create registry with default parsers
-defaultRegistry := genv.NewDefaultRegistry()
+// Create registry with default parsers plus custom types
+defaultRegistry := genv.NewDefaultRegistry(
+    genv.WithParser(func(s string) (UserID, error) {
+        return UserID("user_" + s), nil
+    }),
+)
 
 // Use custom registry
 env := genv.New(genv.WithRegistry(customRegistry))
@@ -158,20 +221,24 @@ env := genv.New(genv.WithRegistry(customRegistry))
 Different `Genv` instances can have completely different parsing behavior:
 
 ```go
+type UserID string
+
 // Registry for production with strict validation
-prodRegistry := genv.NewDefaultRegistry()
-genv.RegisterTypedParserOn(prodRegistry, func(s string) (UserID, error) {
-    if !strings.HasPrefix(s, "user_") {
-        return "", errors.New("invalid UserID format")
-    }
-    return UserID(s), nil
-})
+prodRegistry := genv.NewDefaultRegistry(
+    genv.WithParser(func(s string) (UserID, error) {
+        if !strings.HasPrefix(s, "user_") {
+            return "", errors.New("invalid UserID format")
+        }
+        return UserID(s), nil
+    }),
+)
 
 // Registry for testing with lenient validation
-testRegistry := genv.NewDefaultRegistry()
-genv.RegisterTypedParserOn(testRegistry, func(s string) (UserID, error) {
-    return UserID("user_" + s), nil // Always add prefix
-})
+testRegistry := genv.NewDefaultRegistry(
+    genv.WithParser(func(s string) (UserID, error) {
+        return UserID("user_" + s), nil // Always add prefix
+    }),
+)
 
 prodEnv := genv.New(genv.WithRegistry(prodRegistry))
 testEnv := genv.New(genv.WithRegistry(testRegistry))
@@ -181,67 +248,80 @@ testEnv := genv.New(genv.WithRegistry(testRegistry))
 
 ### Working with Custom Types
 
-The new registry system enables full end-to-end custom type parsing:
+The registry system with `WithParser` enables full end-to-end custom type parsing:
 
 ```go
 type ServicePort int
 type LogLevel string
 
-// Create registry with custom parsers
-registry := genv.NewDefaultRegistry()
+// Create registry with custom parsers using functional options
+registry := genv.NewDefaultRegistry(
+    genv.WithParser(func(s string) (ServicePort, error) {
+        port, err := strconv.Atoi(s)
+        if err != nil {
+            return ServicePort(0), err
+        }
+        if port < 1024 || port > 65535 {
+            return ServicePort(0), errors.New("port out of range")
+        }
+        return ServicePort(port), nil
+    }),
+    genv.WithParser(func(s string) (LogLevel, error) {
+        level := strings.ToUpper(s)
+        if level == "DEBUG" || level == "INFO" || level == "WARN" || level == "ERROR" {
+            return LogLevel(level), nil
+        }
+        return "", errors.New("invalid log level")
+    }),
+)
 
-genv.RegisterTypedParserOn(registry, func(s string) (ServicePort, error) {
-    port, err := strconv.Atoi(s)
-    if err != nil {
-        return ServicePort(0), err
-    }
-    if port < 1024 || port > 65535 {
-        return ServicePort(0), errors.New("port out of range")
-    }
-    return ServicePort(port), nil
-})
+// Use custom types with simplified API
+env := genv.New(
+    genv.WithRegistry(registry),
+    genv.WithAllowDefault(func(*genv.Genv) (bool, error) { return true, nil }),
+)
 
-genv.RegisterTypedParserOn(registry, func(s string) (LogLevel, error) {
-    level := strings.ToUpper(s)
-    if level == "DEBUG" || level == "INFO" || level == "WARN" || level == "ERROR" {
-        return LogLevel(level), nil
-    }
-    return "", errors.New("invalid log level")
-})
-
-// Use custom types
-env := genv.New(genv.WithRegistry(registry))
 var config struct {
     Port     ServicePort
     LogLevel LogLevel
 }
 
-genv.Type(env.Var("SERVICE_PORT"), &config.Port)
-genv.Type(env.Var("LOG_LEVEL"), &config.LogLevel)
-
-if err := env.Parse(); err != nil {
+err := genv.Parse(env,
+    genv.Bind("SERVICE_PORT", &config.Port).Default("8080"),
+    genv.Bind("LOG_LEVEL", &config.LogLevel).Default("INFO"),
+)
+if err != nil {
     log.Fatal(err)
 }
 ```
 
 ### Custom Type Slices
 
-Custom types work with slice parsing using the same delimiter system:
+Custom types work with slice parsing using `BindMany`:
 
 ```go
 type Priority int
 
-genv.RegisterTypedParserOn(registry, func(s string) (Priority, error) {
-    switch strings.ToLower(s) {
-    case "low": return Priority(1), nil
-    case "medium": return Priority(2), nil
-    case "high": return Priority(3), nil
-    default: return Priority(0), errors.New("invalid priority")
-    }
-})
+registry := genv.NewDefaultRegistry(
+    genv.WithParser(func(s string) (Priority, error) {
+        switch strings.ToLower(s) {
+        case "low": return Priority(1), nil
+        case "medium": return Priority(2), nil
+        case "high": return Priority(3), nil
+        default: return Priority(0), errors.New("invalid priority")
+        }
+    }),
+)
+
+env := genv.New(
+    genv.WithRegistry(registry),
+    genv.WithAllowDefault(func(*genv.Genv) (bool, error) { return true, nil }),
+)
 
 var priorities []Priority
-genv.Types(env.Var("TASK_PRIORITIES"), &priorities) // e.g., "low,high,medium"
+err := genv.Parse(env,
+    genv.BindMany("TASK_PRIORITIES", &priorities).Default("low,high,medium"),
+)
 ```
 
 ### Optional and Default with Custom Types
@@ -251,13 +331,23 @@ Custom types fully support optional and default value patterns:
 ```go
 type Environment string
 
-// Optional custom type
-var env Environment
-genv.Type(genv.Var("APP_ENV").Optional(), &env) // Won't error if missing
+registry := genv.NewDefaultRegistry(
+    genv.WithParser(func(s string) (Environment, error) {
+        return Environment(strings.ToLower(s)), nil
+    }),
+)
 
-// Custom type with default
-var envWithDefault Environment  
-genv.Type(genv.Var("APP_ENV").Default("development"), &envWithDefault)
+env := genv.New(genv.WithRegistry(registry))
+
+var config struct {
+    OptionalEnv Environment
+    EnvWithDefault Environment
+}
+
+err := genv.Parse(env,
+    genv.Bind("APP_ENV", &config.OptionalEnv).Optional(), // Won't error if missing
+    genv.Bind("APP_ENV_DEFAULT", &config.EnvWithDefault).Default("development"),
+)
 ```
 
 ## Registry Patterns
@@ -306,18 +396,23 @@ func NewConfigForEnvironment(environment string) (*genv.Genv, error) {
 
 ## API Reference
 
+### Simplified API (Recommended)
+
+- `genv.Bind[T](key, &target)` - Create VarFunc that binds environment variable to target pointer
+- `genv.BindMany[T](key, &target)` - Create VarFunc that binds comma-separated values to slice pointer
+- `genv.Parse(env, ...VarFunc)` - Execute all VarFuncs and parse environment variables
+
 ### Registry Management
 
-- `genv.NewRegistry()` - Creates empty registry
-- `genv.NewDefaultRegistry()` - Creates registry with built-in parsers  
+- `genv.NewRegistry(opts...)` - Creates empty registry with optional parsers
+- `genv.NewDefaultRegistry(opts...)` - Creates registry with built-in parsers plus optional custom parsers
 - `genv.WithRegistry(registry)` - Configure Genv instance with specific registry
 
 ### Parser Registration
 
-- `genv.RegisterTypedParserOn[T](registry, parseFunc)` - Type-safe registration on specific registry
-- `registry.RegisterParseFunc(reflect.Type, parseFunc)` - Low-level registration using reflection
+- `genv.WithParser[T](parseFunc)` - Functional option to register type-safe parser for type T
 
-### Type Parsing
+### Classic API (Still Supported)
 
 - `genv.Type[T](var, &target)` - Parse single value using generic type inference
 - `genv.NewType[T](var)` - Create and return new parsed value
