@@ -100,15 +100,15 @@ func NewSimplifiedSettings() (SimplifiedSettings, error) {
 
 	var s SimplifiedSettings
 
-	// Simplified API: use Bind() with Parse() and type is auto-detected!
-	// All variables are registered and parsed in one call.
+	// Simplified API: use Bind()/BindMany() with Parse() and type is inferred via generics!
+	// All variables are registered and parsed in one call. Zero reflection overhead.
 	err := genv.Parse(env,
 		genv.Bind("APP_NAME", &s.AppName).Default("MyApp"),
 		genv.Bind("PORT", &s.Port).Default("8080"),
 		genv.Bind("DEBUG", &s.Debug).Default("false"),
 		genv.Bind("TIMEOUT", &s.Timeout).Default("30.5"),
 		genv.Bind("DATABASE_URL", &s.DatabaseURL).Default("https://db.example.com"),
-		genv.Bind("TAGS", &s.Tags).Default("api,web,production"),
+		genv.BindMany("TAGS", &s.Tags).Default("api,web,production"),
 	)
 	if err != nil {
 		return SimplifiedSettings{}, fmt.Errorf("parse env: %w", err)
@@ -387,9 +387,9 @@ func NewAdvancedCustomTypeSettings() (AdvancedCustomSettings, error) {
 
 	// Simplified API works with slices and custom types too!
 	// Before: genv.Types(env.Var("TASK_PRIORITIES").Default("medium|high|low"), &s.Priorities)
-	// After:  genv.Bind("TASK_PRIORITIES", &s.Priorities).Default("medium|high|low")
+	// After:  genv.BindMany("TASK_PRIORITIES", &s.Priorities).Default("medium|high|low")
 	err := genv.Parse(env,
-		genv.Bind("TASK_PRIORITIES", &s.Priorities).Default("medium|high|low"),
+		genv.BindMany("TASK_PRIORITIES", &s.Priorities).Default("medium|high|low"),
 		genv.Bind("SERVICE_NAME", &s.OptionalServiceName).Optional(),
 		genv.Bind("LOG_LEVEL", &s.LogLevel).Default("INFO"),
 	)

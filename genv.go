@@ -637,22 +637,38 @@ func parseOne[T any](ev *Var) (any, error) {
 type Opt[T any] func(*T)
 
 // VarFunc is a function that registers a variable on a Genv instance.
-// It's returned by the package-level Bind() function and used with Parse().
+// It's returned by the package-level Bind() and BindMany() functions and used with Parse().
 type VarFunc func(*Genv) *Var
 
-// Bind creates a VarFunc that will register and parse a variable.
-// The type is automatically detected from the pointer.
+// Bind creates a VarFunc that will register and parse a single value.
+// The type is inferred from the pointer using generics (no reflection).
 //
 // Example:
 //   err := genv.Parse(env,
-//       genv.Bind("PORT", &port),
+//       genv.Bind("PORT", &port),          // T inferred as int
 //       genv.Bind("NAME", &name).Default("unnamed"),
 //       genv.Bind("DEBUG", &debug).Optional(),
 //   )
-func Bind(key string, target any) VarFunc {
+func Bind[T any](key string, target *T) VarFunc {
 	return func(env *Genv) *Var {
 		v := env.Var(key)
-		autoType(v, target)
+		Type(v, target)
+		return v
+	}
+}
+
+// BindMany creates a VarFunc that will register and parse a slice of values.
+// The type is inferred from the pointer using generics (no reflection).
+//
+// Example:
+//   err := genv.Parse(env,
+//       genv.BindMany("TAGS", &tags),
+//       genv.BindMany("PORTS", &ports),
+//   )
+func BindMany[T any](key string, target *[]T, opts ...Opt[Var]) VarFunc {
+	return func(env *Genv) *Var {
+		v := env.Var(key)
+		Types(v, target, opts...)
 		return v
 	}
 }

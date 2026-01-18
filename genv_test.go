@@ -1425,8 +1425,8 @@ func TestVarFuncAPI_Slices(t *testing.T) {
 	var ports []int
 
 	err := Parse(env,
-		Bind("TAGS", &tags),
-		Bind("PORTS", &ports),
+		BindMany("TAGS", &tags),
+		BindMany("PORTS", &ports),
 	)
 
 	assert.NoError(t, err)
@@ -1451,7 +1451,7 @@ func TestVarFuncAPI_CustomTypes(t *testing.T) {
 
 	err := Parse(env,
 		Bind("USER_ID", &userID),
-		Bind("USER_IDS", &userIDs),
+		BindMany("USER_IDS", &userIDs),
 	)
 
 	assert.NoError(t, err)
@@ -1482,7 +1482,7 @@ func TestVarFuncAPI_ComplexScenario(t *testing.T) {
 		Bind("PORT", &cfg.Port),
 		Bind("DEBUG", &cfg.Debug),
 		Bind("TIMEOUT", &cfg.Timeout).Default("30.5"),
-		Bind("FEATURES", &cfg.Features),
+		BindMany("FEATURES", &cfg.Features),
 		Bind("API_KEY", &cfg.APIKey).Default("default-key").Optional(),
 	)
 
