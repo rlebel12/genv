@@ -175,20 +175,19 @@ func LoadMicroserviceConfig(environment string) (MicroserviceConfig, error) {
 
 	var config MicroserviceConfig
 
-	// Core service configuration
-	env.Var("SERVICE_NAME").String(&config.ServiceName)
-	genv.Type(env.Var("SERVICE_PORT").Default("8080"), &config.Port)
-	genv.Type(env.Var("ENVIRONMENT").Default("development"), &config.Environment)
-	genv.Type(env.Var("DATABASE_URL").Default("postgres://localhost:5432/devdb"), &config.DatabaseURL)
-	genv.Type(env.Var("LOG_LEVEL").Default("INFO"), &config.LogLevel)
-	genv.Type(env.Var("METRICS_INTERVAL").Default("30s"), &config.MetricsInterval)
-
-	env.Var("SERVICE_TAGS").Default("api,backend").Optional().Strings(&config.ServiceTags)
-
-	env.Var("RETRY_MAX_ATTEMPTS").Default("3").Int(&config.RetryPolicy.MaxRetries)
-	env.Var("RETRY_BACKOFF_MS").Default("1000").Int(&config.RetryPolicy.BackoffMs)
-
-	if err := env.Parse(); err != nil {
+	// Core service configuration using Bind/BindMany/Parse
+	err := genv.Parse(env,
+		genv.Bind("SERVICE_NAME", &config.ServiceName),
+		genv.Bind("SERVICE_PORT", &config.Port).Default("8080"),
+		genv.Bind("ENVIRONMENT", &config.Environment).Default("development"),
+		genv.Bind("DATABASE_URL", &config.DatabaseURL).Default("postgres://localhost:5432/devdb"),
+		genv.Bind("LOG_LEVEL", &config.LogLevel).Default("INFO"),
+		genv.Bind("METRICS_INTERVAL", &config.MetricsInterval).Default("30s"),
+		genv.BindMany("SERVICE_TAGS", &config.ServiceTags).Default("api,backend").Optional(),
+		genv.Bind("RETRY_MAX_ATTEMPTS", &config.RetryPolicy.MaxRetries).Default("3"),
+		genv.Bind("RETRY_BACKOFF_MS", &config.RetryPolicy.BackoffMs).Default("1000"),
+	)
+	if err != nil {
 		return MicroserviceConfig{}, fmt.Errorf("load microservice config: %w", err)
 	}
 

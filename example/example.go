@@ -29,9 +29,9 @@ func main() {
 		"Tags", simplifiedSettings.Tags,
 	)
 
-	// Example 0b: Using NewType[T]() for creating variables (NEW!)
-	slog.Info("=== NewType[T]() Generic Function Example ===")
-	DemonstrateNewMethod()
+	// Example 0b: Using Bind() for simple parsing (NEW!)
+	slog.Info("=== Bind API Example ===")
+	DemonstrateBindAPI()
 
 	// Example 1: Basic usage (backward compatible)
 	slog.Info("=== Basic Example ===")
@@ -116,29 +116,33 @@ func NewSimplifiedSettings() (SimplifiedSettings, error) {
 	return s, nil
 }
 
-// DemonstrateNewMethod shows using NewType[T]() for creating variables
-func DemonstrateNewMethod() {
+// DemonstrateBindAPI shows using Bind() for simple parsing
+func DemonstrateBindAPI() {
 	env := genv.New(
 		genv.WithAllowDefault(func(*genv.Genv) (bool, error) { return true, nil }),
 	)
 
-	// Use NewType[T]() for creating new variables - unified API for all types!
-	// Works with built-in types AND custom types!
-	apiKey := genv.NewType[string](env.Var("API_KEY").Default("demo-key-12345"))
-	maxRetries := genv.NewType[int](env.Var("MAX_RETRIES").Default("3"))
-	enableCache := genv.NewType[bool](env.Var("ENABLE_CACHE").Default("true"))
-	apiTimeout := genv.NewType[float64](env.Var("API_TIMEOUT").Default("60.0"))
+	var apiKey string
+	var maxRetries int
+	var enableCache bool
+	var apiTimeout float64
 
-	if err := env.Parse(); err != nil {
+	err := genv.Parse(env,
+		genv.Bind("API_KEY", &apiKey).Default("demo-key-12345"),
+		genv.Bind("MAX_RETRIES", &maxRetries).Default("3"),
+		genv.Bind("ENABLE_CACHE", &enableCache).Default("true"),
+		genv.Bind("API_TIMEOUT", &apiTimeout).Default("60.0"),
+	)
+	if err != nil {
 		slog.Error("parse error", "error", err.Error())
 		return
 	}
 
-	slog.Info("NewType[T]() Generic Function Results",
-		"ApiKey", *apiKey,
-		"MaxRetries", *maxRetries,
-		"EnableCache", *enableCache,
-		"ApiTimeout", *apiTimeout,
+	slog.Info("Bind API Results",
+		"ApiKey", apiKey,
+		"MaxRetries", maxRetries,
+		"EnableCache", enableCache,
+		"ApiTimeout", apiTimeout,
 	)
 }
 
@@ -162,34 +166,28 @@ func NewSettings() (Settings, error) {
 
 	var s Settings
 
-	env.Var("STRING_VAR").String(&s.StringVar)
-	env.Var("INT_VAR").Int(&s.IntVar)
-	env.Var("BOOL_VAR").Bool(&s.BoolVar)
-	env.Var("ALWAYS_DEFAULT_STRING_VAR").
-		String(&s.AlwaysDefaultStringVar).
-		Default("default value", env.WithAllowDefaultAlways())
-	env.Var("OPTIONAL_FLOAT_VAR").Float64(&s.OptionalFloatVar).Optional()
-	env.Var("ADVANCED_URL_VAR").
-		Default("https://example.com",
-			env.WithAllowDefault(func(*genv.Genv) (bool, error) {
-				clone := env.Clone()
-				allow := clone.Var("ADVANCED_URL_VAR_ALLOW_DEFAULT").
-					Default("true", clone.WithAllowDefaultAlways()).
-					NewBool()
-				if err := clone.Parse(); err != nil {
-					return false, fmt.Errorf("parse ADVANCED_URL_VAR_ALLOW_DEFAULT: %w", err)
-				}
-				return *allow, nil
-			}),
-		).
-		Optional().
-		URL(&s.AdvancedURLVar)
-	env.Var("MANY_INT_VAR").
-		Optional().
-		Default("123;456;", env.WithAllowDefaultAlways()).
-		Ints(&s.ManyIntVar)
+	// Custom allow function for ADVANCED_URL_VAR that checks another env var
+	advancedAllowFunc := func(*genv.Genv) (bool, error) {
+		clone := env.Clone()
+		var allow bool
+		if err := genv.Parse(clone,
+			genv.Bind("ADVANCED_URL_VAR_ALLOW_DEFAULT", &allow).Default("true", clone.WithAllowDefaultAlways()),
+		); err != nil {
+			return false, fmt.Errorf("parse ADVANCED_URL_VAR_ALLOW_DEFAULT: %w", err)
+		}
+		return allow, nil
+	}
 
-	if err := env.Parse(); err != nil {
+	err := genv.Parse(env,
+		genv.Bind("STRING_VAR", &s.StringVar),
+		genv.Bind("INT_VAR", &s.IntVar),
+		genv.Bind("BOOL_VAR", &s.BoolVar),
+		genv.Bind("ALWAYS_DEFAULT_STRING_VAR", &s.AlwaysDefaultStringVar).Default("default value", env.WithAllowDefaultAlways()),
+		genv.Bind("OPTIONAL_FLOAT_VAR", &s.OptionalFloatVar).Optional(),
+		genv.Bind("ADVANCED_URL_VAR", &s.AdvancedURLVar).Default("https://example.com", env.WithAllowDefault(advancedAllowFunc)).Optional(),
+		genv.BindMany("MANY_INT_VAR", &s.ManyIntVar).Optional().Default("123;456;", env.WithAllowDefaultAlways()),
+	)
+	if err != nil {
 		return Settings{}, fmt.Errorf("parse env: %w", err)
 	}
 	return s, nil

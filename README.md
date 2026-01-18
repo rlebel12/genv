@@ -19,9 +19,9 @@ First, ensure that the package is imported:
 import "github.com/rlebel12/genv"
 ```
 
-### Simplified API (Recommended)
+### Basic Usage
 
-The new `Bind()`/`BindMany()` API provides a clean, ergonomic way to declare and parse environment variables with automatic type inference via generics:
+The `Bind()`/`BindMany()` API provides a clean, ergonomic way to declare and parse environment variables with automatic type inference via generics:
 
 ```go
 type Config struct {
@@ -49,38 +49,6 @@ err := genv.Parse(env,
     genv.BindMany("TAGS", &config.Tags).Default("api,web,production"),
 )
 if err != nil {
-    log.Fatal(err)
-}
-```
-
-### Classic API (Still Supported)
-
-For more control, you can use the classic API:
-
-```go
-env := genv.New()
-
-StringVar := env.Var("STRING_VAR").NewString()
-BoolVar := env.Var("BOOL_VAR").NewBool()
-IntVar := env.Var("INT_VAR").NewInt()
-FloatVar := env.Var("FLOAT_VAR").NewFloat64()
-URLVar := env.Var("URL_VAR").NewURL()
-
-if err := env.Parse(); err != nil {
-    log.Fatal(err)
-}
-
-// Or using pointers to populate a struct:
-type Example struct {
-    StringVar string
-    IntVar    int
-}
-
-var example Example
-env.Var("STRING_VAR").String(&example.StringVar)
-env.Var("INT_VAR").Int(&example.IntVar)
-
-if err := env.Parse(); err != nil {
     log.Fatal(err)
 }
 ```
@@ -396,7 +364,7 @@ func NewConfigForEnvironment(environment string) (*genv.Genv, error) {
 
 ## API Reference
 
-### Simplified API (Recommended)
+### Core Functions
 
 - `genv.Bind[T](key, &target)` - Create VarFunc that binds environment variable to target pointer
 - `genv.BindMany[T](key, &target)` - Create VarFunc that binds comma-separated values to slice pointer
@@ -411,13 +379,6 @@ func NewConfigForEnvironment(environment string) (*genv.Genv, error) {
 ### Parser Registration
 
 - `genv.WithParser[T](parseFunc)` - Functional option to register type-safe parser for type T
-
-### Classic API (Still Supported)
-
-- `genv.Type[T](var, &target)` - Parse single value using generic type inference
-- `genv.NewType[T](var)` - Create and return new parsed value
-- `genv.Types[T](var, &target)` - Parse slice of values
-- `genv.NewTypes[T](var)` - Create and return new parsed slice
 
 ### Built-in Types
 

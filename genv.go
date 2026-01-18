@@ -28,13 +28,13 @@ func New(opts ...Opt[Genv]) *Genv {
 	genv := &Genv{
 		allowDefault: func(genv *Genv) (bool, error) {
 			genv = genv.Clone()
-			allow := genv.Var("GENV_ALLOW_DEFAULT").
-				Default("false", genv.WithAllowDefaultAlways()).
-				NewBool()
-			if err := genv.Parse(); err != nil {
+			var allow bool
+			if err := Parse(genv,
+				Bind("GENV_ALLOW_DEFAULT", &allow).Default("false", genv.WithAllowDefaultAlways()),
+			); err != nil {
 				return false, fmt.Errorf("parse GENV_ALLOW_DEFAULT: %w", err)
 			}
-			return *allow, nil
+			return allow, nil
 		},
 		splitKey: ",",
 		registry: NewDefaultRegistry(),
@@ -165,102 +165,6 @@ func (genv *Genv) WithSplitKey(splitKey string) Opt[Var] {
 	return func(mev *Var) {
 		mev.splitKey = splitKey
 	}
-}
-
-func (v *Var) String(s *string) *Var {
-	return Type(v, s)
-}
-
-func (v *Var) NewString() *string {
-	return NewType[string](v)
-}
-
-func (v *Var) Strings(s *[]string, opts ...Opt[Var]) *Var {
-	return Types(v, s, opts...)
-}
-
-func (v *Var) NewStrings(opts ...Opt[Var]) *[]string {
-	return NewTypes[string](v, opts...)
-}
-
-func (v *Var) Bool(b *bool) *Var {
-	return Type(v, b)
-}
-
-func (v *Var) NewBool() *bool {
-	return NewType[bool](v)
-}
-
-func (v *Var) Bools(b *[]bool, opts ...Opt[Var]) *Var {
-	return Types(v, b, opts...)
-}
-
-func (v *Var) NewBools(opts ...Opt[Var]) *[]bool {
-	return NewTypes[bool](v, opts...)
-}
-
-func (v *Var) Int(i *int) *Var {
-	return Type(v, i)
-}
-
-func (v *Var) NewInt() *int {
-	return NewType[int](v)
-}
-
-func (v *Var) Ints(i *[]int, opts ...Opt[Var]) *Var {
-	return Types(v, i, opts...)
-}
-
-func (v *Var) NewInts(opts ...Opt[Var]) *[]int {
-	return NewTypes[int](v, opts...)
-}
-
-func (v *Var) Float64(f *float64) *Var {
-	return Type(v, f)
-}
-
-func (v *Var) NewFloat64() *float64 {
-	return NewType[float64](v)
-}
-
-func (v *Var) Float64s(f *[]float64, opts ...Opt[Var]) *Var {
-	return Types(v, f, opts...)
-}
-
-func (v *Var) NewFloat64s(opts ...Opt[Var]) *[]float64 {
-	return NewTypes[float64](v, opts...)
-}
-
-func (v *Var) URL(u *url.URL) *Var {
-	return Type(v, u)
-}
-
-func (v *Var) NewURL() *url.URL {
-	return NewType[url.URL](v)
-}
-
-func (v *Var) URLs(u *[]url.URL, opts ...Opt[Var]) *Var {
-	return Types(v, u, opts...)
-}
-
-func (v *Var) NewURLs(opts ...Opt[Var]) *[]url.URL {
-	return NewTypes[url.URL](v, opts...)
-}
-
-func (v *Var) UUID(id *uuid.UUID) *Var {
-	return Type(v, id)
-}
-
-func (v *Var) NewUUID() *uuid.UUID {
-	return NewType[uuid.UUID](v)
-}
-
-func (v *Var) UUIDs(id *[]uuid.UUID, opts ...Opt[Var]) *Var {
-	return Types(v, id, opts...)
-}
-
-func (v *Var) NewUUIDs(opts ...Opt[Var]) *[]uuid.UUID {
-	return NewTypes[uuid.UUID](v, opts...)
 }
 
 func (v *Var) resolveValue() (string, error) {
@@ -482,38 +386,6 @@ func getParser[T any](registry *ParserRegistry) (Parser, bool) {
 }
 
 // Type sets the value of a variable of type T using the registered parser
-func Type[T any](v *Var, target *T) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		if err := assignValue(v, target); err != nil {
-			return fmt.Errorf("assignValue: %w", err)
-		}
-		return nil
-	})
-	return v
-}
-
-// NewType creates a new variable of type T using the registered parser
-func NewType[T any](v *Var) *T {
-	target := new(T)
-	Type(v, target)
-	return target
-}
-
-// Types sets the value of a slice of type T using the registered parser
-func Types[T any](v *Var, target *[]T, opts ...Opt[Var]) *Var {
-	v.genv.varFuncs = append(v.genv.varFuncs, func() error {
-		return parseMany(v, target, opts...)
-	})
-	return v
-}
-
-// NewTypes creates a new slice of type T using the registered parser
-func NewTypes[T any](v *Var, opts ...Opt[Var]) *[]T {
-	target := new([]T)
-	Types(v, target, opts...)
-	return target
-}
-
 // parseOne parses using the reflection-based parser interface
 func parseOne[T any](ev *Var) (any, error) {
 	parser, exists := getParser[T](ev.genv.registry)
@@ -560,7 +432,12 @@ type VarFunc func(*Genv) *Var
 func Bind[T any](key string, target *T) VarFunc {
 	return func(env *Genv) *Var {
 		v := env.Var(key)
-		Type(v, target)
+		v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+			if err := assignValue(v, target); err != nil {
+				return fmt.Errorf("assignValue: %w", err)
+			}
+			return nil
+		})
 		return v
 	}
 }
@@ -576,7 +453,9 @@ func Bind[T any](key string, target *T) VarFunc {
 func BindMany[T any](key string, target *[]T, opts ...Opt[Var]) VarFunc {
 	return func(env *Genv) *Var {
 		v := env.Var(key)
-		Types(v, target, opts...)
+		v.genv.varFuncs = append(v.genv.varFuncs, func() error {
+			return parseMany(v, target, opts...)
+		})
 		return v
 	}
 }

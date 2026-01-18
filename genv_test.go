@@ -79,12 +79,12 @@ func TestOptional(t *testing.T) {
 
 func TestWithSplitKey(t *testing.T) {
 	genv := New(WithSplitKey(","))
-	actual := genv.Var("TEST_VAR").
-		Default("123;456", genv.WithAllowDefaultAlways()).
-		NewInts(genv.WithSplitKey(";"))
-	err := genv.Parse()
+	var actual []int
+	err := Parse(genv,
+		BindMany("TEST_VAR", &actual, genv.WithSplitKey(";")).Default("123;456", genv.WithAllowDefaultAlways()),
+	)
 	assert.NoError(t, err)
-	assert.Equal(t, []int{123, 456}, *actual)
+	assert.Equal(t, []int{123, 456}, actual)
 }
 
 type MockDefaultOpt struct {
@@ -127,14 +127,14 @@ func TestDefault(t *testing.T) {
 			}
 			opts = append(opts, fallbackOpts...)
 
-			actual := genv.Var("TEST_VAR").Default("default", opts...).NewString()
-			err := genv.Parse()
+			var actual string
+			err := Parse(genv, Bind("TEST_VAR", &actual).Default("default", opts...))
 			if test.wantErr != nil {
 				assert.ErrorIs(t, err, test.wantErr)
 			} else {
 				assert.NoError(t, err)
 			}
-			assert.Equal(t, test.expectedValue, *actual)
+			assert.Equal(t, test.expectedValue, actual)
 			customOpt.AssertExpectations(t)
 		})
 	}
@@ -152,10 +152,10 @@ func TestString(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.giveValue)
 			env := New()
-			got := env.Var("TEST_VAR").NewString()
-			gotErr := env.Parse()
-			assert.Equal(t, test.wantValue, *got)
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			var got string
+			err := Parse(env, Bind("TEST_VAR", &got))
+			assert.Equal(t, test.wantValue, got)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -173,10 +173,10 @@ func TestManyString(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewStrings()
-			gotErr := env.Parse()
-			assert.Equal(t, test.expected, *got)
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			var got []string
+			err := Parse(env, BindMany("TEST_VAR", &got))
+			assert.Equal(t, test.expected, got)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -194,10 +194,10 @@ func TestBool(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewBool()
-			gotErr := env.Parse()
-			assert.Equal(t, test.expected, *got)
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			var got bool
+			err := Parse(env, Bind("TEST_VAR", &got))
+			assert.Equal(t, test.expected, got)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -215,10 +215,10 @@ func TestManyBool(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewBools()
-			gotErr := env.Parse()
-			assert.Equal(t, test.expected, *got)
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			var got []bool
+			err := Parse(env, BindMany("TEST_VAR", &got))
+			assert.Equal(t, test.expected, got)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -235,10 +235,10 @@ func TestInt(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewInt()
-			gotErr := env.Parse()
-			assert.Equal(t, test.expected, *got)
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			var got int
+			err := Parse(env, Bind("TEST_VAR", &got))
+			assert.Equal(t, test.expected, got)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -256,10 +256,10 @@ func TestManyInt(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewInts()
-			gotErr := env.Parse()
-			assert.Equal(t, test.expected, *got)
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			var got []int
+			err := Parse(env, BindMany("TEST_VAR", &got))
+			assert.Equal(t, test.expected, got)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -276,10 +276,10 @@ func TestFloat64(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewFloat64()
-			gotErr := env.Parse()
-			assert.Equal(t, test.expected, *got)
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			var got float64
+			err := Parse(env, Bind("TEST_VAR", &got))
+			assert.Equal(t, test.expected, got)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -297,10 +297,10 @@ func TestManyFloat64(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewFloat64s()
-			gotErr := env.Parse()
-			assert.Equal(t, test.expected, *got)
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			var got []float64
+			err := Parse(env, BindMany("TEST_VAR", &got))
+			assert.Equal(t, test.expected, got)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -317,10 +317,10 @@ func TestURL(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewURL()
-			gotErr := env.Parse()
+			var got url.URL
+			err := Parse(env, Bind("TEST_VAR", &got))
 			assert.Equal(t, test.expected, got.String())
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -338,12 +338,12 @@ func TestManyURL(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewURLs()
-			gotErr := env.Parse()
+			var got []url.URL
+			err := Parse(env, BindMany("TEST_VAR", &got))
 			for i, want := range test.expected {
-				assert.Equal(t, want, (*got)[i].String())
+				assert.Equal(t, want, got[i].String())
 			}
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -361,10 +361,10 @@ func TestUUID(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewUUID()
-			gotErr := env.Parse()
-			assert.Equal(t, test.wantErr, gotErr != nil)
-			assert.Equal(t, test.expected, *got)
+			var got uuid.UUID
+			err := Parse(env, Bind("TEST_VAR", &got))
+			assert.Equal(t, test.wantErr, err != nil)
+			assert.Equal(t, test.expected, got)
 		})
 	}
 }
@@ -383,28 +383,30 @@ func TestManyUUID(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_VAR", test.value)
 			env := New()
-			got := env.Var("TEST_VAR").NewUUIDs()
-			gotErr := env.Parse()
+			var got []uuid.UUID
+			err := Parse(env, BindMany("TEST_VAR", &got))
 			for i, want := range test.expected {
-				assert.Equal(t, want, (*got)[i])
+				assert.Equal(t, want, got[i])
 			}
-			assert.Equal(t, test.wantErr, gotErr != nil)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
 
 func TestOptionalEmpty(t *testing.T) {
 	env := New()
-	got := env.Var("TEST_VAR").Optional().NewString()
-	assert.NoError(t, env.Parse())
-	assert.Equal(t, "", *got)
+	var got string
+	err := Parse(env, Bind("TEST_VAR", &got).Optional())
+	assert.NoError(t, err)
+	assert.Equal(t, "", got)
 }
 
 func TestParseManyNoSplitKey(t *testing.T) {
 	env := New()
-	got := env.Var("TEST_VAR").NewInts(env.WithSplitKey(""))
-	assert.Error(t, env.Parse())
-	assert.Nil(t, *got)
+	var got []int
+	err := Parse(env, BindMany("TEST_VAR", &got, env.WithSplitKey("")))
+	assert.Error(t, err)
+	assert.Nil(t, got)
 }
 
 func TestNewRegistry(t *testing.T) {
@@ -450,18 +452,18 @@ func TestGenvWithCustomRegistry(t *testing.T) {
 	t.Setenv("CUSTOM_VAR", "value")
 	env := New(WithRegistry(registry))
 
-	_ = env.Var("CUSTOM_VAR").NewString()
-	err := env.Parse()
+	var s string
+	err := Parse(env, Bind("CUSTOM_VAR", &s))
 	assert.Error(t, err) // No string parser in empty registry
 }
 
 func TestGenvWithDefaultRegistry(t *testing.T) {
 	t.Setenv("TEST_VAR", "hello")
 	env := New()
-	got := env.Var("TEST_VAR").NewString()
-	err := env.Parse()
+	var got string
+	err := Parse(env, Bind("TEST_VAR", &got))
 	assert.NoError(t, err)
-	assert.Equal(t, "hello", *got)
+	assert.Equal(t, "hello", got)
 }
 
 func TestRegistryIsolation(t *testing.T) {
@@ -540,8 +542,8 @@ func TestRegistryEmptyRegistryWithBuiltinTypes(t *testing.T) {
 	t.Setenv("TEST_VAR", "hello")
 	env := New(WithRegistry(emptyRegistry))
 
-	_ = env.Var("TEST_VAR").NewString()
-	err := env.Parse()
+	var s string
+	err := Parse(env, Bind("TEST_VAR", &s))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no parser registered for type string")
 }
