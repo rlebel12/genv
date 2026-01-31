@@ -58,6 +58,20 @@ func WithAllowDefault(allowFn allowFunc) Opt[Genv] {
 	}
 }
 
+// WithAllowDefaultAlways returns a Genv option that always allows default values.
+func WithAllowDefaultAlways() Opt[Genv] {
+	return WithAllowDefault(func(*Genv) (bool, error) {
+		return true, nil
+	})
+}
+
+// WithAllowDefaultNever returns a Genv option that never allows default values.
+func WithAllowDefaultNever() Opt[Genv] {
+	return WithAllowDefault(func(*Genv) (bool, error) {
+		return false, nil
+	})
+}
+
 func WithRegistry(registry *ParserRegistry) Opt[Genv] {
 	return func(genv *Genv) {
 		genv.registry = registry
@@ -108,6 +122,13 @@ func (genv *Genv) WithAllowDefault(allow func(genv *Genv) (bool, error)) Opt[fal
 func (genv *Genv) WithAllowDefaultAlways() Opt[fallback] {
 	return genv.WithAllowDefault(func(*Genv) (bool, error) {
 		return true, nil
+	})
+}
+
+// WithAllowDefaultNever returns a fallback option that never allows the default value.
+func (genv *Genv) WithAllowDefaultNever() Opt[fallback] {
+	return genv.WithAllowDefault(func(*Genv) (bool, error) {
+		return false, nil
 	})
 }
 

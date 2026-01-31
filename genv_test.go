@@ -32,6 +32,20 @@ func TestWithAllowDefault(t *testing.T) {
 	assert.True(t, gotAllow)
 }
 
+func TestWithAllowDefaultAlways(t *testing.T) {
+	genv := New(WithAllowDefaultAlways())
+	gotAllow, gotErr := genv.allowDefault(genv)
+	assert.NoError(t, gotErr)
+	assert.True(t, gotAllow)
+}
+
+func TestWithAllowDefaultNever(t *testing.T) {
+	genv := New(WithAllowDefaultNever())
+	gotAllow, gotErr := genv.allowDefault(genv)
+	assert.NoError(t, gotErr)
+	assert.False(t, gotAllow)
+}
+
 func TestNew(t *testing.T) {
 	for name, test := range map[string]struct {
 		value         string
@@ -138,6 +152,16 @@ func TestDefault(t *testing.T) {
 			customOpt.AssertExpectations(t)
 		})
 	}
+}
+
+func TestFallbackWithAllowDefaultNever(t *testing.T) {
+	// Test that per-variable WithAllowDefaultNever overrides global allow
+	genv := New(WithAllowDefaultAlways())
+
+	var actual string
+	err := Parse(genv, Bind("TEST_VAR", &actual).Default("default", genv.WithAllowDefaultNever()))
+	assert.ErrorIs(t, err, ErrRequiredEnvironmentVariable)
+	assert.Equal(t, "", actual)
 }
 
 func TestString(t *testing.T) {
