@@ -113,20 +113,20 @@ func (genv *Genv) Clone() *Genv {
 	return clone
 }
 
-func (genv *Genv) WithAllowDefault(allow func(genv *Genv) (bool, error)) Opt[fallback] {
-	return func(f *fallback) {
+func (genv *Genv) WithAllowDefault(allow func(genv *Genv) (bool, error)) Opt[Fallback] {
+	return func(f *Fallback) {
 		f.allow = allow
 	}
 }
 
-func (genv *Genv) WithAllowDefaultAlways() Opt[fallback] {
+func (genv *Genv) WithAllowDefaultAlways() Opt[Fallback] {
 	return genv.WithAllowDefault(func(*Genv) (bool, error) {
 		return true, nil
 	})
 }
 
 // WithAllowDefaultNever returns a fallback option that never allows the default value.
-func (genv *Genv) WithAllowDefaultNever() Opt[fallback] {
+func (genv *Genv) WithAllowDefaultNever() Opt[Fallback] {
 	return genv.WithAllowDefault(func(*Genv) (bool, error) {
 		return false, nil
 	})
@@ -140,15 +140,15 @@ type Var struct {
 	allowDefault allowFunc
 	splitKey     string
 	genv         *Genv
-	fb           *fallback
+	fb           *Fallback
 }
 
-type fallback struct {
+type Fallback struct {
 	allow allowFunc
 	value string
 }
 
-func (fb *fallback) resolve(genv *Genv) (string, error) {
+func (fb *Fallback) resolve(genv *Genv) (string, error) {
 	if fb == nil || fb.allow == nil {
 		return "", nil
 	}
@@ -169,8 +169,8 @@ func (v *Var) Optional() *Var {
 }
 
 // Default sets the default value for the environment variable if not present.
-func (v *Var) Default(value string, opts ...Opt[fallback]) *Var {
-	fb := new(fallback)
+func (v *Var) Default(value string, opts ...Opt[Fallback]) *Var {
+	fb := new(Fallback)
 	fb.allow = v.allowDefault
 	fb.value = value
 
@@ -322,11 +322,12 @@ type RegistryOpt func(*ParserRegistry)
 // The type is inferred from the function signature.
 //
 // Example:
-//   registry := genv.NewDefaultRegistry(
-//       genv.WithParser(func(s string) (UserID, error) {
-//           return UserID("user_" + s), nil
-//       }),
-//   )
+//
+//	registry := genv.NewDefaultRegistry(
+//	    genv.WithParser(func(s string) (UserID, error) {
+//	        return UserID("user_" + s), nil
+//	    }),
+//	)
 func WithParser[T any](parseFn func(string) (T, error)) RegistryOpt {
 	return func(r *ParserRegistry) {
 		var zero T
@@ -371,9 +372,10 @@ func registerBuiltinParsers(r *ParserRegistry) {
 // NewRegistry creates an empty parser registry with optional custom parsers.
 //
 // Example:
-//   registry := genv.NewRegistry(
-//       genv.WithParser(func(s string) (UserID, error) { ... }),
-//   )
+//
+//	registry := genv.NewRegistry(
+//	    genv.WithParser(func(s string) (UserID, error) { ... }),
+//	)
 func NewRegistry(opts ...RegistryOpt) *ParserRegistry {
 	r := newParserRegistry()
 	for _, opt := range opts {
@@ -387,9 +389,10 @@ func NewRegistry(opts ...RegistryOpt) *ParserRegistry {
 // custom parsers.
 //
 // Example:
-//   registry := genv.NewDefaultRegistry(
-//       genv.WithParser(func(s string) (UserID, error) { ... }),
-//   )
+//
+//	registry := genv.NewDefaultRegistry(
+//	    genv.WithParser(func(s string) (UserID, error) { ... }),
+//	)
 func NewDefaultRegistry(opts ...RegistryOpt) *ParserRegistry {
 	r := newParserRegistry()
 	registerBuiltinParsers(r)
@@ -444,11 +447,12 @@ type VarFunc func(*Genv) *Var
 // The type is inferred from the pointer using generics (no reflection).
 //
 // Example:
-//   err := genv.Parse(env,
-//       genv.Bind("PORT", &port),          // T inferred as int
-//       genv.Bind("NAME", &name).Default("unnamed"),
-//       genv.Bind("DEBUG", &debug).Optional(),
-//   )
+//
+//	err := genv.Parse(env,
+//	    genv.Bind("PORT", &port),          // T inferred as int
+//	    genv.Bind("NAME", &name).Default("unnamed"),
+//	    genv.Bind("DEBUG", &debug).Optional(),
+//	)
 func Bind[T any](key string, target *T) VarFunc {
 	return func(env *Genv) *Var {
 		v := env.Var(key)
@@ -466,10 +470,11 @@ func Bind[T any](key string, target *T) VarFunc {
 // The type is inferred from the pointer using generics (no reflection).
 //
 // Example:
-//   err := genv.Parse(env,
-//       genv.BindMany("TAGS", &tags),
-//       genv.BindMany("PORTS", &ports),
-//   )
+//
+//	err := genv.Parse(env,
+//	    genv.BindMany("TAGS", &tags),
+//	    genv.BindMany("PORTS", &ports),
+//	)
 func BindMany[T any](key string, target *[]T, opts ...Opt[Var]) VarFunc {
 	return func(env *Genv) *Var {
 		v := env.Var(key)
@@ -498,7 +503,7 @@ func wrapVarFunc(vf VarFunc, fn func(*Var) *Var) VarFunc {
 }
 
 // Default sets the default value for this variable
-func (vf VarFunc) Default(value string, opts ...Opt[fallback]) VarFunc {
+func (vf VarFunc) Default(value string, opts ...Opt[Fallback]) VarFunc {
 	return wrapVarFunc(vf, func(v *Var) *Var {
 		return v.Default(value, opts...)
 	})

@@ -134,8 +134,8 @@ func TestDefault(t *testing.T) {
 
 			customOpt := new(MockDefaultOpt)
 			customOpt.On("optFunc")
-			opts := []Opt[fallback]{func(fb *fallback) { customOpt.optFunc() }}
-			fallbackOpts := make([]Opt[fallback], len(test.opts))
+			opts := []Opt[Fallback]{func(fb *Fallback) { customOpt.optFunc() }}
+			fallbackOpts := make([]Opt[Fallback], len(test.opts))
 			for i, opt := range test.opts {
 				fallbackOpts[i] = genv.WithAllowDefault(opt)
 			}
